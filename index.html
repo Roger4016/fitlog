@@ -2,753 +2,385 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="default"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<meta name="theme-color" content="#faf8f5"/>
+<link rel="manifest" href="manifest.json"/>
 <title>FitLog 飲食運動追蹤</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,900;1,9..40,400&family=Fraunces:opsz,wght@9..144,700;9..144,900&family=Noto+Sans+TC:wght@400;500;600;700;900&display=swap" rel="stylesheet"/>
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: #f5f5f5; }
-  textarea { font-family: inherit; }
+:root{--bg:#faf8f5;--card:#fff;--card-alt:#f7f5f2;--border:#ebe7e1;--border-light:#f2efeb;--text:#2c2518;--text-sec:#8a7e6f;--text-ter:#b5ab9e;--accent:#c45d2c;--accent-light:#fdf0ea;--accent-border:#f5c9b3;--teal:#2a7d6e;--teal-light:#eaf6f3;--teal-border:#b3ddd4;--blue:#3565a0;--blue-light:#edf2f8;--blue-border:#b5cde5;--amber:#b8860b;--amber-light:#fdf6e3;--amber-border:#edd9a3;--plum:#7b4f8a;--plum-light:#f5eef8;--plum-border:#d4b8df;--red:#c53030;--red-light:#fef2f0;--red-border:#f5c4be;--shadow-sm:0 1px 3px rgba(44,37,24,.04),0 1px 2px rgba(44,37,24,.06);--shadow-md:0 4px 12px rgba(44,37,24,.06),0 2px 4px rgba(44,37,24,.04);--shadow-lg:0 12px 32px rgba(44,37,24,.1),0 4px 8px rgba(44,37,24,.04);--radius:14px;--radius-sm:10px;--radius-xs:7px;--font-display:'Fraunces','Noto Sans TC',serif;--font-body:'DM Sans','Noto Sans TC',sans-serif}
+*{box-sizing:border-box;margin:0;padding:0}html{background:var(--bg);height:100%;overflow:hidden}body{background:var(--bg);font-family:var(--font-body);-webkit-font-smoothing:antialiased;color:var(--text);overscroll-behavior-y:none;height:100%;overflow:hidden}#root{height:100%;overflow:hidden}textarea,input,button,select{font-family:var(--font-body);font-size:16px}input,textarea,select{font-size:16px!important}::-webkit-scrollbar{width:0;height:0}
+@keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.fade-up{animation:fadeUp .4s cubic-bezier(.22,.61,.36,1) both}.slide-up{animation:slideUp .35s cubic-bezier(.22,.61,.36,1) both}.fade-in{animation:fadeIn .25s ease-out both}.pulse{animation:pulse 1.4s ease-in-out infinite}
 </style>
 </head>
 <body>
 <div id="root"></div>
-<script type="text/babel">
-const { useState, useEffect, useRef } = React;
+<script>
+var h=React.createElement,useState=React.useState,useEffect=React.useEffect,useRef=React.useRef;
+var A=Object.assign;
+var DB={get:function(k){try{var v=localStorage.getItem("fl_"+k);return v?JSON.parse(v):null}catch(e){return null}},set:function(k,v){try{localStorage.setItem("fl_"+k,JSON.stringify(v));return true}catch(e){return false}},del:function(k){try{localStorage.removeItem("fl_"+k);return true}catch(e){return false}},listKeys:function(p){var keys=[];for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);if(k.indexOf("fl_"+p)===0)keys.push(k.slice(3))}return keys}};
+var uid=function(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7)};
+var calcCal=function(p,f,c){return Math.round((+p||0)*4+(+f||0)*9+(+c||0)*4)};
+var fmtDate=function(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")};
+var todayStr=function(){return fmtDate(new Date())};
+var addDays=function(d,n){var r=new Date(d+"T12:00:00");r.setDate(r.getDate()+n);return fmtDate(r)};
+var weekday=function(d){return["日","一","二","三","四","五","六"][new Date(d+"T12:00:00").getDay()]};
+var DEFAULT_GOALS={protein:115,fat:60,carbs:200,calories:1800};
+var GEMINI_URL="https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
+function getApiKey(){return localStorage.getItem("fl_gemini_key")||""}
+function setApiKey(k){localStorage.setItem("fl_gemini_key",k)}
+async function callAI(parts){var key=getApiKey();if(!key)throw new Error("請先在設定中輸入 Gemini API Key");for(var attempt=0;attempt<2;attempt++){try{var res=await fetch(GEMINI_URL,{method:"POST",headers:{"Content-Type":"application/json","x-goog-api-key":key},body:JSON.stringify({contents:[{parts:parts}],generationConfig:{temperature:0.1,maxOutputTokens:1000}})});var data=await res.json();if(data.error)throw new Error(data.error.message||"API錯誤");if(data.promptFeedback&&data.promptFeedback.blockReason)throw new Error("請求被安全政策攔截，請換描述或改用手動輸入");var c=data.candidates&&data.candidates[0];if(!c)throw new Error("無有效回應，請重試或改用手動");if(c.finishReason&&c.finishReason!=="STOP"&&c.finishReason!=="MAX_TOKENS")throw new Error("回應中斷 ("+c.finishReason+")，請換描述試試");var txt="";if(c.content&&c.content.parts){for(var i=0;i<c.content.parts.length;i++){if(c.content.parts[i].text)txt+=c.content.parts[i].text}}if(!txt)throw new Error("模型未回傳文字（可能被過濾）");return txt}catch(e){if(attempt===1)throw e;await new Promise(function(r){setTimeout(r,500)})}}}
+function parseJSON(t){try{return JSON.parse(t)}catch(e){}var m=t.match(/\{[\s\S]*\}/);if(m)try{return JSON.parse(m[0])}catch(e2){}var m2=t.match(/\{[^{}]*\}/);if(m2)try{return JSON.parse(m2[0])}catch(e3){}var nums=t.match(/"(?:protein|fat|carbs|calories|duration|confidence)"\s*[:：]\s*"?([\d.]+|[^",}]*)"?/g);if(nums&&nums.length>=2){var obj={};nums.forEach(function(s){var kv=s.match(/"(\w+)"\s*[:：]\s*"?([^",}]*)"?/);if(kv)obj[kv[1]]=isNaN(+kv[2])?kv[2]:+kv[2]});return obj}throw new Error("無法解析: "+t.slice(0,120))}
+function checkAI(){return !!getApiKey()}
 
-const GOALS   = { protein:115, fat:60, carbs:200, calories:1800 };
-const AI_URL  = "https://api.anthropic.com/v1/messages";
-const MODEL   = "claude-sonnet-4-20250514";
-const URL_KEY = "fitlog2_gs_url";
-
-const calcCal  = (p,f,c) => Math.round((+p||0)*4+(+f||0)*9+(+c||0)*4);
-const fmtDate  = d => d.toISOString().slice(0,10);
-const todayStr = () => fmtDate(new Date());
-const addDays  = (d,n) => { const r=new Date(d); r.setDate(r.getDate()+n); return fmtDate(r); };
-
-const loadApiUrl = () => localStorage.getItem(URL_KEY)||"";
-const saveApiUrl = url => localStorage.setItem(URL_KEY, url);
-
-async function callAI(messages, system) {
-  const res = await fetch(AI_URL, {
-    method:"POST", headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({model:MODEL, max_tokens:1000, system, messages})
-  });
-  const data = await res.json();
-  return data.content?.[0]?.text||"";
-}
-
-const css = {
-  app:   { fontFamily:'-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif', background:"#f5f5f5", minHeight:"100vh", maxWidth:480, margin:"0 auto", paddingBottom:110 },
-  card:  { background:"#fff", borderRadius:14, boxShadow:"0 1px 4px rgba(0,0,0,0.08)", padding:16, margin:"0 12px 12px" },
-  btn:   (bg,color="#fff")=>({ background:bg, color, border:"none", borderRadius:12, fontWeight:600, fontSize:15, cursor:"pointer", minHeight:44, display:"flex", alignItems:"center", justifyContent:"center", gap:6, padding:"0 18px", fontFamily:"inherit" }),
-  btn52: (bg,color="#fff")=>({ background:bg, color, border:"none", borderRadius:13, fontWeight:700, fontSize:15, cursor:"pointer", minHeight:52, flex:1, display:"flex", alignItems:"center", justifyContent:"center", gap:6, fontFamily:"inherit" }),
-  input: { width:"100%", border:"1.5px solid #e5e5e5", borderRadius:10, padding:"11px 13px", fontSize:15, outline:"none", boxSizing:"border-box", fontFamily:"inherit", background:"#fafafa" },
-  label: { fontSize:13, color:"#666", fontWeight:500, marginBottom:4, display:"block" },
-  overlay: { position:"fixed", inset:0, background:"rgba(0,0,0,0.45)", zIndex:50, display:"flex", alignItems:"flex-end" },
-  sheet:   { background:"#fff", borderRadius:"20px 20px 0 0", width:"100%", maxHeight:"92vh", overflowY:"auto", padding:"20px 16px 36px" },
-  tab:   a=>({ flex:1, padding:"10px 0", border:"none", background:"none", fontWeight:a?700:400, fontSize:14, color:a?"#007aff":"#888", borderBottom:a?"2px solid #007aff":"2px solid transparent", cursor:"pointer", fontFamily:"inherit" }),
-  toast: { position:"fixed", bottom:120, left:"50%", transform:"translateX(-50%)", background:"rgba(0,0,0,0.82)", color:"#fff", borderRadius:20, padding:"10px 22px", fontSize:14, zIndex:200, whiteSpace:"nowrap" },
+var S={
+card:{background:"var(--card)",borderRadius:"var(--radius)",border:"1px solid var(--border)",padding:16,marginBottom:12,boxShadow:"var(--shadow-sm)"},
+cardFlat:{background:"var(--card-alt)",borderRadius:"var(--radius)",padding:16,marginBottom:12},
+btn:function(bg,co,bd){return{background:bg||"var(--accent)",color:co||"#fff",border:bd||"none",borderRadius:"var(--radius-sm)",fontWeight:600,fontSize:14,cursor:"pointer",minHeight:44,display:"flex",alignItems:"center",justifyContent:"center",gap:6,padding:"0 16px",transition:"all .2s cubic-bezier(.22,.61,.36,1)",WebkitTapHighlightColor:"transparent",letterSpacing:"0.01em"}},
+input:{width:"100%",border:"1.5px solid var(--border)",borderRadius:"var(--radius-sm)",padding:"11px 14px",fontSize:16,outline:"none",boxSizing:"border-box",background:"var(--card)",transition:"border-color .2s",letterSpacing:"0.01em"},
+label:{fontSize:11,color:"var(--text-sec)",fontWeight:600,marginBottom:5,display:"block",letterSpacing:"0.06em",textTransform:"uppercase"},
+overlay:{position:"fixed",inset:0,background:"rgba(44,37,24,0.35)",backdropFilter:"blur(8px)",WebkitBackdropFilter:"blur(8px)",zIndex:50,display:"flex",alignItems:"flex-end"},
+sheet:{background:"var(--card)",borderRadius:"20px 20px 0 0",width:"100%",maxHeight:"92vh",overflowY:"auto",overscrollBehavior:"contain",padding:"24px 20px calc(36px + env(safe-area-inset-bottom,12px))",WebkitOverflowScrolling:"touch",boxShadow:"var(--shadow-lg)"},
+toast:{position:"fixed",bottom:100,left:"50%",transform:"translateX(-50%)",background:"var(--text)",color:"#fff",borderRadius:24,padding:"10px 24px",fontSize:13,fontWeight:500,zIndex:200,whiteSpace:"nowrap",boxShadow:"var(--shadow-lg)"},
+tabBtn:function(a){return{flex:1,padding:"10px 0",border:"none",background:"none",fontWeight:a?700:500,fontSize:13,color:a?"var(--accent)":"var(--text-ter)",borderBottom:a?"2.5px solid var(--accent)":"2.5px solid transparent",cursor:"pointer",transition:"all .2s",letterSpacing:"0.02em"}}
 };
 
-function DateNav({date,setDate}) {
-  const isToday=date===todayStr();
-  return (
-    <div style={{display:"flex",alignItems:"center",gap:8,justifyContent:"center"}}>
-      <button onClick={()=>setDate(addDays(date,-1))} style={{...css.btn("#f0f0f0","#333"),minHeight:36,padding:"0 14px",borderRadius:8}}>‹</button>
-      <span style={{fontSize:14,fontWeight:600,minWidth:130,textAlign:"center"}}>
-        {date}{isToday&&<span style={{marginLeft:6,background:"#007aff",color:"#fff",borderRadius:6,padding:"1px 7px",fontSize:11}}>今天</span>}
-      </span>
-      <button onClick={()=>!isToday&&setDate(addDays(date,1))} disabled={isToday}
-        style={{...css.btn(isToday?"#f5f5f5":"#f0f0f0",isToday?"#ccc":"#333"),minHeight:36,padding:"0 14px",borderRadius:8,cursor:isToday?"default":"pointer"}}>›</button>
-    </div>
-  );
+function DateNav(p){var d=p.date,sd=p.setDate,it=d===todayStr();
+return h("div",{style:{display:"flex",alignItems:"center",gap:8,justifyContent:"center"}},
+h("button",{onClick:function(){sd(addDays(d,-1))},style:A({},S.btn("var(--card-alt)","var(--text)","1px solid var(--border)"),{minHeight:34,padding:"0 12px",borderRadius:"var(--radius-xs)",fontSize:16})},"‹"),
+h("span",{style:{fontSize:14,fontWeight:600,minWidth:155,textAlign:"center",color:"var(--text)"}},d,"（",weekday(d),"）",it&&h("span",{style:{marginLeft:6,background:"var(--accent)",color:"#fff",borderRadius:6,padding:"2px 8px",fontSize:10,fontWeight:700,verticalAlign:"middle",letterSpacing:"0.04em"}},"TODAY")),
+h("button",{onClick:function(){if(!it)sd(addDays(d,1))},disabled:it,style:A({},S.btn(it?"var(--bg)":"var(--card-alt)",it?"var(--text-ter)":"var(--text)","1px solid "+(it?"var(--border-light)":"var(--border)")),{minHeight:34,padding:"0 12px",borderRadius:"var(--radius-xs)",fontSize:16,cursor:it?"default":"pointer"})},"›"))}
+
+function MacroBar(p){var pct=Math.min((p.val/p.goal)*100,100),ov=p.val>p.goal;
+return h("div",{style:{marginBottom:10}},h("div",{style:{display:"flex",justifyContent:"space-between",marginBottom:4,alignItems:"baseline"}},
+h("span",{style:{fontSize:12,fontWeight:600,color:"var(--text-sec)",letterSpacing:"0.03em"}},p.label),
+h("span",{style:{fontSize:12,fontWeight:700,color:ov?"var(--red)":"var(--text)",fontVariantNumeric:"tabular-nums"}},p.val," / ",p.goal,"g")),
+h("div",{style:{background:"var(--border-light)",borderRadius:6,height:6,overflow:"hidden"}},
+h("div",{style:{width:pct+"%",background:ov?"var(--red)":p.color,height:"100%",borderRadius:6,transition:"width .5s cubic-bezier(.22,.61,.36,1)"}})))}
+
+function RingProgress(p){var size=p.size||120,stroke=p.stroke||8,r=(size-stroke)/2,circ=2*Math.PI*r;
+var pct=Math.min(p.value/p.max,1.15),off=circ*(1-Math.min(pct,1));
+var col=pct<=0.85?"var(--teal)":pct<=1?"var(--amber)":"var(--red)";
+return h("svg",{width:size,height:size,style:{transform:"rotate(-90deg)",display:"block"}},
+h("circle",{cx:size/2,cy:size/2,r:r,fill:"none",stroke:"var(--border-light)",strokeWidth:stroke}),
+h("circle",{cx:size/2,cy:size/2,r:r,fill:"none",stroke:col,strokeWidth:stroke,strokeLinecap:"round",strokeDasharray:circ,strokeDashoffset:off,style:{transition:"stroke-dashoffset .8s cubic-bezier(.22,.61,.36,1),stroke .3s"}}))}
+
+function ImageUploadRow(p){var s=useState([]),pvs=s[0],setPvs=s[1],ref=useRef();
+var handleFiles=function(e){var files=e.target.files;if(!files||!files.length)return;var arr=[],loaded=0;
+for(var i=0;i<files.length;i++){(function(file){var r=new FileReader();r.onload=function(ev){arr.push(ev.target.result);loaded++;if(loaded===files.length){setPvs(function(old){var merged=[].concat(old,arr);p.onImages(merged);return merged})}};r.readAsDataURL(file)})(files[i])}};
+var removeImg=function(idx){setPvs(function(old){var next=old.filter(function(unused,i){return i!==idx});p.onImages(next.length?next:null);return next})};
+return h("div",{style:{marginBottom:14}},h("div",{style:S.label},p.label),
+h("input",{ref:ref,type:"file",accept:"image/*",multiple:true,style:{display:"none"},onChange:handleFiles}),
+h("button",{onClick:function(){ref.current.value="";ref.current.click()},style:A({},S.btn("var(--card-alt)","var(--text)","1.5px dashed var(--border)"),{width:"100%",minHeight:48,borderRadius:"var(--radius-sm)",fontSize:14})},pvs.length?"📷 再選更多（已選 "+pvs.length+" 張）":"📷 選取圖片"),
+pvs.length>0&&h("div",{style:{display:"flex",gap:8,marginTop:8,overflowX:"auto",paddingBottom:4}},pvs.map(function(src,i){return h("div",{key:i,style:{position:"relative",flexShrink:0}},
+h("img",{src:src,alt:"",style:{width:80,height:80,borderRadius:"var(--radius-xs)",objectFit:"cover",border:"1px solid var(--border)",display:"block"}}),
+h("button",{onClick:function(){removeImg(i)},style:{position:"absolute",top:-6,right:-6,width:22,height:22,borderRadius:11,background:"var(--red)",color:"#fff",border:"2px solid var(--card)",fontSize:12,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",padding:0,lineHeight:1}},"×"))})))}
+
+function FoodSheet(p){
+var _d=useState(p.defaultDate),date=_d[0],setDate=_d[1],_s=useState(""),desc=_s[0],setDesc=_s[1];
+var _i=useState(null),imgs=_i[0],setImgs=_i[1],_r=useState(null),result=_r[0],setResult=_r[1];
+var _m=useState(false),manual=_m[0],setManual=_m[1],_f=useState({protein:"",fat:"",carbs:""}),form=_f[0],setForm=_f[1];
+var _l=useState(false),loading=_l[0],setLoading=_l[1],_e=useState(""),err=_e[0],setErr=_e[1];
+var doAI=async function(){setLoading(true);setErr("");setResult(null);try{if(!checkAI()){setErr("⚠️ 請先在設定中輸入 Gemini API Key");setLoading(false);return}var userText='你是營養師。根據食物描述或圖片估算每份的三大營養素。只回傳JSON：{"protein":數字,"fat":數字,"carbs":數字,"confidence":"高/中/低"}。不含熱量欄位。\n\n食物：'+(desc||"（根據圖片判斷）")+(p.settings.defaultRules?"\n規則："+p.settings.defaultRules:"");var parts=[];if(imgs&&imgs.length>0){for(var ii=0;ii<imgs.length;ii++){var pt=imgs[ii].split(",");parts.push({inline_data:{mime_type:(pt[0].match(/:(.*?);/)||[])[1]||"image/jpeg",data:pt[1]}})}}parts.push({text:userText});var t=await callAI(parts);var j=parseJSON(t);setResult(j);setForm({protein:String(j.protein||""),fat:String(j.fat||""),carbs:String(j.carbs||"")});}catch(e){setErr("AI 分析失敗："+((e&&e.message)||"請重試或改用手動輸入"))}setLoading(false)};
+var doAdd=function(){var pr=+(manual?form.protein:result&&result.protein)||0,fa=+(manual?form.fat:result&&result.fat)||0,ca=+(manual?form.carbs:result&&result.carbs)||0;
+if(!pr&&!fa&&!ca)return;p.onAdd(date,{id:uid(),desc:desc||"食物",protein:pr,fat:fa,carbs:ca,time:new Date().toLocaleTimeString("zh-TW",{hour:"2-digit",minute:"2-digit"})})};
+var has=result||(manual&&(+form.protein||+form.fat||+form.carbs));
+var sf=function(k,v){var u={};u[k]=v;setForm(function(f){return A({},f,u)})};
+return h("div",{className:"fade-in",style:S.overlay,onClick:p.onClose},
+h("div",{className:"slide-up",style:S.sheet,onClick:function(e){e.stopPropagation()}},
+h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}},h("div",{style:{fontSize:18,fontWeight:700,fontFamily:"var(--font-display)"}},"新增飲食"),h("button",{onClick:p.onClose,style:A({},S.btn("var(--card-alt)","var(--text-sec)"),{minHeight:32,minWidth:32,padding:0,borderRadius:8,fontSize:15})},"✕")),
+h("div",{style:{marginBottom:16}},h("div",{style:S.label},"日期"),h(DateNav,{date:date,setDate:setDate})),
+h("div",{style:{marginBottom:16}},h("div",{style:S.label},"食物描述"),h("input",{value:desc,onChange:function(e){setDesc(e.target.value)},placeholder:"例：麥當勞大麥克、滷肉飯小碗…",style:S.input})),
+h(ImageUploadRow,{label:"食物圖片（可選）",onImages:setImgs}),
+h("div",{style:{display:"flex",gap:8,marginBottom:14}},
+h("button",{onClick:doAI,disabled:loading||(!desc&&!imgs),style:A({},S.btn(loading?"var(--border-light)":"var(--plum)"),{flex:1,minHeight:48,borderRadius:"var(--radius-sm)",opacity:(!desc&&!imgs)?.5:1})},loading?h("span",{className:"pulse"},"⏳ 分析中…"):"🤖 AI 分析"),
+h("button",{onClick:function(){setManual(!manual);setResult(null)},style:A({},S.btn(manual?"var(--blue-light)":"var(--card-alt)",manual?"var(--blue)":"var(--text-sec)",manual?"1.5px solid var(--blue-border)":"1px solid var(--border)"),{minHeight:48,padding:"0 18px",borderRadius:"var(--radius-sm)"})},"✏️ 手動")),
+err&&h("div",{style:{color:"var(--red)",fontSize:12,marginBottom:12,padding:"10px 14px",background:"var(--red-light)",borderRadius:"var(--radius-xs)",border:"1px solid var(--red-border)",maxHeight:120,overflowY:"auto",wordBreak:"break-all"}},err),
+manual&&h("div",{className:"fade-up",style:{background:"var(--card-alt)",borderRadius:"var(--radius)",padding:16,marginBottom:16}},
+h("div",{style:{display:"flex",gap:8,marginBottom:10}},[["protein","蛋白質 g"],["fat","脂肪 g"],["carbs","碳水 g"]].map(function(x){return h("div",{key:x[0],style:{flex:1}},h("div",{style:A({},S.label,{fontSize:10})},x[1]),h("input",{type:"number",inputMode:"decimal",value:form[x[0]],onChange:function(e){sf(x[0],e.target.value)},style:A({},S.input,{padding:"10px 8px",fontSize:16,textAlign:"center"})}))})),
+h("div",{style:{fontSize:12,color:"var(--text-sec)",textAlign:"center",fontWeight:500}},"熱量 = ",h("b",{style:{color:"var(--text)"}},calcCal(form.protein,form.fat,form.carbs)+" kcal"))),
+result&&!manual&&h("div",{className:"fade-up",style:{background:"var(--plum-light)",borderRadius:"var(--radius)",padding:16,marginBottom:16,border:"1px solid var(--plum-border)"}},
+h("div",{style:{display:"flex",justifyContent:"space-between",marginBottom:12,alignItems:"center"}},h("span",{style:{fontSize:14,fontWeight:700}},"分析結果"),h("span",{style:{background:result.confidence==="高"?"var(--teal)":result.confidence==="中"?"var(--amber)":"var(--red)",color:"#fff",borderRadius:20,padding:"3px 12px",fontSize:10,fontWeight:700}},"信心度 "+result.confidence)),
+h("div",{style:{display:"flex",gap:6}},[["蛋白質",result.protein,"g","var(--blue)"],["脂肪",result.fat,"g","var(--amber)"],["碳水",result.carbs,"g","var(--plum)"],["熱量",calcCal(result.protein,result.fat,result.carbs),"kcal","var(--teal)"]].map(function(x){return h("div",{key:x[0],style:{flex:1,textAlign:"center",background:"var(--card)",borderRadius:"var(--radius-xs)",padding:"10px 2px",boxShadow:"var(--shadow-sm)"}},h("div",{style:{fontSize:20,fontWeight:800,color:x[3],fontVariantNumeric:"tabular-nums"}},x[1]),h("div",{style:{fontSize:10,color:"var(--text-ter)",marginTop:2}},x[0]+" "+x[2]))}))),
+h("button",{onClick:doAdd,disabled:!has,style:A({},S.btn(!has?"var(--border-light)":"var(--accent)"),{width:"100%",minHeight:52,borderRadius:"var(--radius)",fontSize:16,fontWeight:700,opacity:!has?.5:1,boxShadow:has?"0 4px 16px rgba(196,93,44,0.25)":"none"})},"✓ 確認新增")))
 }
 
-function MacroBar({label,val,goal,color}) {
-  const pct=Math.min((val/goal)*100,100), over=val>goal;
-  return (
-    <div style={{marginBottom:10}}>
-      <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-        <span style={{fontSize:13,fontWeight:500}}>{label}</span>
-        <span style={{fontSize:13,color:over?"#ef4444":"#333"}}>{val}g / {goal}g</span>
-      </div>
-      <div style={{background:"#eee",borderRadius:6,height:8,overflow:"hidden"}}>
-        <div style={{width:`${pct}%`,background:over?"#ef4444":color,height:"100%",borderRadius:6,transition:"width .3s"}}/>
-      </div>
-    </div>
-  );
+function ExerciseSheet(p){
+var _d=useState(p.defaultDate),date=_d[0],setDate=_d[1],_s=useState(""),desc=_s[0],setDesc=_s[1];
+var _i=useState(null),imgs=_i[0],setImgs=_i[1],_r=useState(null),result=_r[0],setResult=_r[1];
+var _m=useState(false),manual=_m[0],setManual=_m[1],_f=useState({calories:"",duration:""}),form=_f[0],setForm=_f[1];
+var _l=useState(false),loading=_l[0],setLoading=_l[1],_e=useState(""),err=_e[0],setErr=_e[1];
+var doAI=async function(){setLoading(true);setErr("");setResult(null);try{if(!checkAI()){setErr("⚠️ 請先在設定中輸入 Gemini API Key");setLoading(false);return}var userText='你是健身教練。根據運動描述或Apple Watch截圖解析Active Calories和時長(分鐘)。只回傳JSON：{"calories":數字,"duration":數字}。\n\n運動：'+(desc||"（根據截圖判斷）");var parts=[];if(imgs&&imgs.length>0){for(var ii=0;ii<imgs.length;ii++){var pt=imgs[ii].split(",");parts.push({inline_data:{mime_type:(pt[0].match(/:(.*?);/)||[])[1]||"image/jpeg",data:pt[1]}})}}parts.push({text:userText});var t=await callAI(parts);var j=parseJSON(t);setResult(j);setForm({calories:String(j.calories||""),duration:String(j.duration||"")});}catch(e){setErr("AI 解析失敗："+((e&&e.message)||"請重試或改用手動輸入"))}setLoading(false)};
+var doAdd=function(){var cal=+(manual?form.calories:result&&result.calories)||0,dur=+(manual?form.duration:result&&result.duration)||0;
+if(!cal&&!dur)return;p.onAdd(date,{id:uid(),desc:desc||"運動",calories:cal,duration:dur,time:new Date().toLocaleTimeString("zh-TW",{hour:"2-digit",minute:"2-digit"})})};
+var has=result||(manual&&(+form.calories||+form.duration));
+var sf=function(k,v){var u={};u[k]=v;setForm(function(f){return A({},f,u)})};
+return h("div",{className:"fade-in",style:S.overlay,onClick:p.onClose},
+h("div",{className:"slide-up",style:S.sheet,onClick:function(e){e.stopPropagation()}},
+h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}},h("div",{style:{fontSize:18,fontWeight:700,fontFamily:"var(--font-display)"}},"新增運動"),h("button",{onClick:p.onClose,style:A({},S.btn("var(--card-alt)","var(--text-sec)"),{minHeight:32,minWidth:32,padding:0,borderRadius:8,fontSize:15})},"✕")),
+h("div",{style:{marginBottom:16}},h("div",{style:S.label},"日期"),h(DateNav,{date:date,setDate:setDate})),
+h("div",{style:{marginBottom:16}},h("div",{style:S.label},"描述"),h("input",{value:desc,onChange:function(e){setDesc(e.target.value)},placeholder:"例：跑步30分鐘、重訓胸背…",style:S.input})),
+h(ImageUploadRow,{label:"Apple Watch 截圖（可選）",onImages:setImgs}),
+h("div",{style:{display:"flex",gap:8,marginBottom:14}},
+h("button",{onClick:doAI,disabled:loading||(!desc&&!imgs),style:A({},S.btn(loading?"var(--border-light)":"var(--teal)"),{flex:1,minHeight:48,borderRadius:"var(--radius-sm)",opacity:(!desc&&!imgs)?.5:1})},loading?h("span",{className:"pulse"},"⏳ 解析中…"):"🤖 AI 解析"),
+h("button",{onClick:function(){setManual(!manual);setResult(null)},style:A({},S.btn(manual?"var(--teal-light)":"var(--card-alt)",manual?"var(--teal)":"var(--text-sec)",manual?"1.5px solid var(--teal-border)":"1px solid var(--border)"),{minHeight:48,padding:"0 18px",borderRadius:"var(--radius-sm)"})},"✏️ 手動")),
+err&&h("div",{style:{color:"var(--red)",fontSize:12,marginBottom:12,padding:"10px 14px",background:"var(--red-light)",borderRadius:"var(--radius-xs)",border:"1px solid var(--red-border)",maxHeight:120,overflowY:"auto",wordBreak:"break-all"}},err),
+manual&&h("div",{className:"fade-up",style:{background:"var(--card-alt)",borderRadius:"var(--radius)",padding:16,marginBottom:16}},
+h("div",{style:{display:"flex",gap:8}},[["calories","消耗熱量 kcal"],["duration","時長 分鐘"]].map(function(x){return h("div",{key:x[0],style:{flex:1}},h("div",{style:A({},S.label,{fontSize:10})},x[1]),h("input",{type:"number",inputMode:"decimal",value:form[x[0]],onChange:function(e){sf(x[0],e.target.value)},style:A({},S.input,{padding:"10px 8px",fontSize:16,textAlign:"center"})}))}))),
+result&&!manual&&h("div",{className:"fade-up",style:{background:"var(--teal-light)",borderRadius:"var(--radius)",padding:16,marginBottom:16,border:"1px solid var(--teal-border)"}},
+h("span",{style:{fontSize:14,fontWeight:700,display:"block",marginBottom:12}},"解析結果"),
+h("div",{style:{display:"flex",gap:10}},
+h("div",{style:{flex:1,textAlign:"center",background:"var(--card)",borderRadius:"var(--radius-xs)",padding:"12px 0",boxShadow:"var(--shadow-sm)"}},h("div",{style:{fontSize:26,fontWeight:800,color:"var(--teal)",fontVariantNumeric:"tabular-nums"}},result.calories),h("div",{style:{fontSize:10,color:"var(--text-ter)",marginTop:2}},"Active Cal")),
+h("div",{style:{flex:1,textAlign:"center",background:"var(--card)",borderRadius:"var(--radius-xs)",padding:"12px 0",boxShadow:"var(--shadow-sm)"}},h("div",{style:{fontSize:26,fontWeight:800,color:"var(--blue)",fontVariantNumeric:"tabular-nums"}},result.duration),h("div",{style:{fontSize:10,color:"var(--text-ter)",marginTop:2}},"分鐘")))),
+h("button",{onClick:doAdd,disabled:!has,style:A({},S.btn(!has?"var(--border-light)":"var(--teal)"),{width:"100%",minHeight:52,borderRadius:"var(--radius)",fontSize:16,fontWeight:700,opacity:!has?.5:1,boxShadow:has?"0 4px 16px rgba(42,125,110,0.25)":"none"})},"✓ 確認新增")))
 }
 
-function ImageUploadRow({label,onImage}) {
-  const [mode,setMode]=useState("gallery");
-  const [preview,setPreview]=useState(null);
-  const ref=useRef();
-  const handleFile=e=>{
-    const file=e.target.files?.[0]; if(!file) return;
-    const reader=new FileReader();
-    reader.onload=ev=>{setPreview(ev.target.result);onImage(ev.target.result);};
-    reader.readAsDataURL(file);
-  };
-  return (
-    <div style={{marginBottom:14}}>
-      <div style={css.label}>{label}</div>
-      <div style={{display:"flex",gap:8,marginBottom:8}}>
-        {["camera","gallery"].map(m=>(
-          <button key={m} onClick={()=>setMode(m)} style={{...css.btn(mode===m?"#007aff":"#f0f0f0",mode===m?"#fff":"#333"),flex:1,minHeight:40,borderRadius:10,fontSize:13}}>
-            {m==="camera"?"📷 直接拍照":"🖼 從相簿選取"}
-          </button>
-        ))}
-      </div>
-      <input ref={ref} type="file" accept="image/*" capture={mode==="camera"?"environment":undefined} style={{display:"none"}} onChange={handleFile}/>
-      <button onClick={()=>{ref.current.value="";ref.current.click();}}
-        style={{...css.btn("#f5f5f5","#333"),width:"100%",minHeight:40,border:"1.5px dashed #ddd",borderRadius:10,fontSize:13}}>
-        {preview?"✅ 已選取（點此重選）":"點此選取圖片"}
-      </button>
-      {preview&&<img src={preview} alt="" style={{width:"100%",borderRadius:10,marginTop:8,maxHeight:140,objectFit:"cover"}}/>}
-    </div>
-  );
+function QuickAddSheet(p){
+var _items=useState(p.favorites),items=_items[0],setItems=_items[1];
+var _drag=useState(null),dragIdx=_drag[0],setDragIdx=_drag[1];
+var _over=useState(null),overIdx=_over[0],setOverIdx=_over[1];
+var _dragY=useState(0),dragY=_dragY[0],setDragY=_dragY[1];
+var _startRect=useState(null),startRect=_startRect[0],setStartRect=_startRect[1];
+var startY=useRef(0),startIdx=useRef(0),itemH=useRef(64),didMove=useRef(false);
+var onTouchStart=function(idx,e){e.preventDefault();var touch=e.touches[0];startY.current=touch.clientY;startIdx.current=idx;didMove.current=false;var row=e.currentTarget.parentElement;itemH.current=row.offsetHeight+8;var rect=row.getBoundingClientRect();setStartRect({top:rect.top,left:rect.left,width:rect.width,height:rect.height});setDragIdx(idx);setDragY(touch.clientY)};
+var onTouchMove=function(e){if(dragIdx===null)return;didMove.current=true;var y=e.touches[0].clientY;setDragY(y);var newIdx=Math.max(0,Math.min(items.length-1,Math.round(startIdx.current+(y-startY.current)/itemH.current)));if(newIdx!==overIdx)setOverIdx(newIdx)};
+var onTouchEnd=function(){if(dragIdx!==null&&overIdx!==null&&dragIdx!==overIdx){var arr=[].concat(items);var item=arr.splice(dragIdx,1)[0];arr.splice(overIdx,0,item);setItems(arr);p.onReorder(arr)}setDragIdx(null);setOverIdx(null);setStartRect(null);didMove.current=false};
+var getReorderedItems=function(){if(dragIdx===null||overIdx===null||dragIdx===overIdx)return items;var arr=[].concat(items);var item=arr.splice(dragIdx,1)[0];arr.splice(overIdx,0,item);return arr};
+var displayItems=getReorderedItems();var floatTop=startRect?dragY-startY.current+startRect.top:0;
+return h("div",{className:"fade-in",style:S.overlay,onClick:function(){if(dragIdx===null)p.onClose()}},
+h("div",{className:"slide-up",style:S.sheet,onClick:function(e){e.stopPropagation()},onTouchMove:onTouchMove,onTouchEnd:onTouchEnd},
+h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}},h("div",{style:{fontSize:18,fontWeight:700,fontFamily:"var(--font-display)"}},"快速新增"),h("button",{onClick:p.onClose,style:A({},S.btn("var(--card-alt)","var(--text-sec)"),{minHeight:32,minWidth:32,padding:0,borderRadius:8,fontSize:15})},"✕")),
+h("div",{style:{fontSize:12,color:"var(--text-ter)",marginBottom:16}},"長按 ☰ 拖曳排序 · 點擊即新增至今天"),
+items.length===0&&h("div",{style:{color:"var(--text-ter)",textAlign:"center",padding:"32px 0",fontSize:14}},"請先至「常用」頁籤新增常用食物"),
+displayItems.map(function(fav,pos){var origIdx=items.indexOf(fav);var isBeingDragged=dragIdx!==null&&fav===items[dragIdx];var showDropLine=dragIdx!==null&&overIdx!==null&&pos===overIdx&&overIdx!==dragIdx;
+return h("div",{key:fav.name+":"+origIdx},showDropLine&&dragIdx>overIdx&&h("div",{style:{height:3,background:"var(--accent)",borderRadius:2,marginBottom:6,marginLeft:36}}),
+h("div",{style:{display:"flex",width:"100%",alignItems:"center",gap:8,marginBottom:8,opacity:isBeingDragged?.25:1,transform:dragIdx!==null&&!isBeingDragged?"scale(0.98)":"scale(1)",transition:"all .2s ease"}},
+h("div",{onTouchStart:function(e){onTouchStart(items.indexOf(fav),e)},style:{cursor:"grab",padding:"10px 6px",fontSize:18,color:dragIdx!==null?"var(--accent)":"var(--text-ter)",touchAction:"none",userSelect:"none",WebkitUserSelect:"none"}},"☰"),
+h("button",{onClick:function(){if(!didMove.current&&dragIdx===null)p.onAdd(fav)},style:{display:"flex",flex:1,alignItems:"center",justifyContent:"space-between",background:"var(--accent-light)",border:"1px solid var(--accent-border)",borderRadius:"var(--radius-sm)",padding:"14px 16px",cursor:"pointer",fontFamily:"inherit",transition:"all .2s"}},
+h("div",{style:{textAlign:"left"}},h("div",{style:{fontWeight:600,fontSize:15,color:"var(--text)"}},fav.name),h("div",{style:{fontSize:11,color:"var(--text-sec)",marginTop:3}},"P "+fav.protein+"g · F "+fav.fat+"g · C "+fav.carbs+"g")),
+h("div",{style:{fontWeight:700,fontSize:15,color:"var(--accent)",fontVariantNumeric:"tabular-nums"}},calcCal(fav.protein,fav.fat,fav.carbs)+" kcal"))),
+showDropLine&&dragIdx<overIdx&&h("div",{style:{height:3,background:"var(--accent)",borderRadius:2,marginTop:-2,marginBottom:6,marginLeft:36}}))}),
+dragIdx!==null&&startRect&&h("div",{style:{position:"fixed",top:floatTop,left:startRect.left,width:startRect.width,zIndex:100,pointerEvents:"none",display:"flex",alignItems:"center",gap:8,opacity:.92,transform:"scale(1.03)",filter:"drop-shadow(0 8px 24px rgba(44,37,24,.18))"}},
+h("div",{style:{padding:"10px 6px",fontSize:18,color:"var(--accent)"}},"☰"),
+h("div",{style:{display:"flex",flex:1,alignItems:"center",justifyContent:"space-between",background:"var(--card)",border:"2px solid var(--accent)",borderRadius:"var(--radius-sm)",padding:"14px 16px"}},
+h("div",{style:{textAlign:"left"}},h("div",{style:{fontWeight:600,fontSize:15,color:"var(--text)"}},items[dragIdx].name),h("div",{style:{fontSize:11,color:"var(--text-sec)",marginTop:3}},"P "+items[dragIdx].protein+"g · F "+items[dragIdx].fat+"g · C "+items[dragIdx].carbs+"g")),
+h("div",{style:{fontWeight:700,fontSize:15,color:"var(--accent)",fontVariantNumeric:"tabular-nums"}},calcCal(items[dragIdx].protein,items[dragIdx].fat,items[dragIdx].carbs)+" kcal")))))
 }
 
-function SetupScreen({onSetup,toast}) {
-  const [url,setUrl]=useState("");
-  const [testing,setTesting]=useState(false);
-  const handle=async()=>{
-    if(!url.trim())return;
-    setTesting(true);
-    await onSetup(url.trim());
-    setTesting(false);
-  };
-  return (
-    <div style={{...css.app,display:"flex",flexDirection:"column",padding:"40px 20px"}}>
-      <div style={{textAlign:"center",marginBottom:32}}>
-        <div style={{fontSize:48,marginBottom:8}}>🥗</div>
-        <div style={{fontSize:24,fontWeight:800,marginBottom:4}}>FitLog</div>
-        <div style={{fontSize:14,color:"#888"}}>連線 Google Sheets 後開始使用</div>
-      </div>
-      <div style={{...css.card,marginBottom:16}}>
-        <div style={{fontWeight:700,fontSize:15,marginBottom:14}}>📋 設定步驟</div>
-        {[
-          "建立一個新的 Google 試算表",
-          "點選「擴充功能」→「Apps Script」",
-          "刪除預設內容，貼上 fitlog_appscript.gs 程式碼",
-          "點上方「儲存」後，點「部署」→「新增部署作業」",
-          "類型選「網頁應用程式」，執行身分「我」，存取權「所有人」",
-          "按「部署」，複製產生的網址，貼到下方"
-        ].map((s,i)=>(
-          <div key={i} style={{display:"flex",gap:10,marginBottom:10,alignItems:"flex-start"}}>
-            <span style={{background:"#007aff",color:"#fff",borderRadius:"50%",width:22,height:22,minWidth:22,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,marginTop:1}}>{i+1}</span>
-            <span style={{fontSize:13,color:"#444",lineHeight:1.6}}>{s}</span>
-          </div>
-        ))}
-      </div>
-      <div style={{marginBottom:12}}>
-        <div style={css.label}>Apps Script 網址</div>
-        <input value={url} onChange={e=>setUrl(e.target.value)}
-          placeholder="https://script.google.com/macros/s/..."
-          style={css.input}/>
-      </div>
-      <button onClick={handle} disabled={!url.trim()||testing}
-        style={{...css.btn((!url.trim()||testing)?"#c5d5f5":"#007aff"),width:"100%",minHeight:52,borderRadius:13,fontSize:16,fontWeight:700}}>
-        {testing?"⏳ 測試連線中...":"✓ 連線並開始使用"}
-      </button>
-      {toast&&<div style={css.toast}>{toast}</div>}
-    </div>
-  );
+function FavoritesTab(p){
+var _a=useState(false),adding=_a[0],setAdding=_a[1],_e=useState(null),editIdx=_e[0],setEditIdx=_e[1];
+var _f=useState({name:"",protein:"",fat:"",carbs:""}),form=_f[0],setForm=_f[1],_l=useState(false),aiL=_l[0],setAiL=_l[1];
+var _cd=useState(null),confirmDel=_cd[0],setConfirmDel=_cd[1];
+var reset=function(){setForm({name:"",protein:"",fat:"",carbs:""});setAdding(false);setEditIdx(null)};
+var sf=function(k,v){var u={};u[k]=v;setForm(function(f){return A({},f,u)})};
+var save=function(){if(!form.name)return;var it={name:form.name,protein:+form.protein||0,fat:+form.fat||0,carbs:+form.carbs||0};p.onSave(editIdx!==null?p.favorites.map(function(f,i){return i===editIdx?it:f}):[].concat(p.favorites,[it]));reset()};
+var doAI=async function(){if(!form.name)return;setAiL(true);try{if(!checkAI()){p.showToast("請先在設定輸入 Gemini API Key");setAiL(false);return}var t=await callAI([{text:'你是營養師，估算每份的三大營養素。只回傳JSON：{"protein":數字,"fat":數字,"carbs":數字}。\n\n食物：'+form.name+(p.settings.defaultRules?"\n規則："+p.settings.defaultRules:"")}]);var j=parseJSON(t);setForm(function(f){return A({},f,{protein:String(j.protein||""),fat:String(j.fat||""),carbs:String(j.carbs||"")})});}catch(e){p.showToast("AI 估算失敗："+((e&&e.message)||"請重試"))}setAiL(false)};
+return h("div",{style:{padding:"0 16px"}},h("div",{style:S.card},
+h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}},h("span",{style:{fontSize:15,fontWeight:700}},"常用食物"),!adding&&editIdx===null&&h("button",{onClick:function(){setAdding(true)},style:A({},S.btn(),{minHeight:34,padding:"0 14px",borderRadius:"var(--radius-xs)",fontSize:13})},"+  新增")),
+(adding||editIdx!==null)&&h("div",{className:"fade-up",style:{background:"var(--accent-light)",borderRadius:"var(--radius)",padding:16,marginBottom:14,border:"1px solid var(--accent-border)"}},
+h("input",{placeholder:"食物名稱",value:form.name,onChange:function(e){sf("name",e.target.value)},style:A({},S.input,{marginBottom:8})}),
+h("div",{style:{display:"flex",gap:8,marginBottom:8}},[["protein","蛋白質g"],["fat","脂肪g"],["carbs","碳水g"]].map(function(x){return h("input",{key:x[0],type:"number",inputMode:"decimal",placeholder:x[1],value:form[x[0]],onChange:function(e){sf(x[0],e.target.value)},style:A({},S.input,{flex:1,padding:"9px 8px",fontSize:16,textAlign:"center"})})})),
+h("div",{style:{fontSize:12,color:"var(--text-sec)",marginBottom:10,textAlign:"center"}},"熱量 = ",h("b",{style:{color:"var(--text)"}},calcCal(form.protein,form.fat,form.carbs)+" kcal")),
+h("div",{style:{display:"flex",gap:8}},
+h("button",{onClick:doAI,disabled:aiL||!form.name,style:A({},S.btn("var(--plum-light)","var(--plum)","1px solid var(--plum-border)"),{flex:1,minHeight:38,borderRadius:"var(--radius-xs)",fontSize:13})},aiL?"⏳":"🤖"," AI 估算"),
+h("button",{onClick:save,style:A({},S.btn(),{flex:1,minHeight:38,borderRadius:"var(--radius-xs)",fontSize:13})},"✓ 儲存"),
+h("button",{onClick:reset,style:A({},S.btn("var(--card-alt)","var(--text-sec)","1px solid var(--border)"),{minHeight:38,padding:"0 14px",borderRadius:"var(--radius-xs)",fontSize:13})},"取消"))),
+p.favorites.length===0&&!adding&&h("div",{style:{color:"var(--text-ter)",fontSize:14,textAlign:"center",padding:"24px 0"}},"尚未新增常用食物"),
+p.favorites.map(function(fav,i){var isDel=confirmDel===i;return h("div",{key:i,style:{display:"flex",alignItems:"center",padding:"12px 0",borderBottom:i<p.favorites.length-1?"1px solid var(--border-light)":"none",gap:8}},
+h("div",{style:{flex:1,minWidth:0}},h("div",{style:{fontWeight:600,fontSize:14}},fav.name),h("div",{style:{fontSize:11,color:"var(--text-sec)",marginTop:3}},"P "+fav.protein+"g · F "+fav.fat+"g · C "+fav.carbs+"g · "+calcCal(fav.protein,fav.fat,fav.carbs)+" kcal")),
+isDel?h("div",{style:{display:"flex",gap:6,flexShrink:0}},h("button",{onClick:function(){p.onSave(p.favorites.filter(function(unused,j){return j!==i}));setConfirmDel(null)},style:A({},S.btn("var(--red)"),{minHeight:32,padding:"0 12px",borderRadius:8,fontSize:13})},"刪除"),h("button",{onClick:function(){setConfirmDel(null)},style:A({},S.btn("var(--card-alt)","var(--text-sec)","1px solid var(--border)"),{minHeight:32,padding:"0 12px",borderRadius:8,fontSize:13})},"取消"))
+:h("div",{style:{display:"flex",gap:6,flexShrink:0}},
+h("button",{onClick:function(){p.onAddToDay(fav)},style:A({},S.btn("var(--teal-light)","var(--teal)","1px solid var(--teal-border)"),{minHeight:32,padding:"0 10px",borderRadius:"var(--radius-xs)",fontSize:12})},"+今天"),
+h("button",{onClick:function(){setEditIdx(i);setForm({name:fav.name,protein:String(fav.protein),fat:String(fav.fat),carbs:String(fav.carbs)});setAdding(false)},style:A({},S.btn("var(--card-alt)","var(--text-sec)","1px solid var(--border)"),{minHeight:32,padding:"0 10px",borderRadius:"var(--radius-xs)",fontSize:12})},"✎"),
+h("button",{onClick:function(){setConfirmDel(i)},style:A({},S.btn("var(--red-light)","var(--red)","1px solid var(--red-border)"),{minHeight:32,padding:"0 10px",borderRadius:"var(--radius-xs)",fontSize:13})},"×")))})))
 }
 
-function FoodSheet({defaultDate,settings,onAdd,onClose}) {
-  const [date,setDate]=useState(defaultDate);
-  const [desc,setDesc]=useState("");
-  const [img,setImg]=useState(null);
-  const [result,setResult]=useState(null);
-  const [loading,setLoading]=useState(false);
-  const [err,setErr]=useState("");
-  const handleAI=async()=>{
-    setLoading(true);setErr("");setResult(null);
-    try{
-      const content=[];
-      if(img){const[h,d]=img.split(",");content.push({type:"image",source:{type:"base64",media_type:h.match(/:(.*?);/)?.[1]||"image/jpeg",data:d}});}
-      content.push({type:"text",text:`食物：${desc||"（根據圖片判斷）"}\n${settings.defaultRules?"規則："+settings.defaultRules:""}`});
-      const text=await callAI([{role:"user",content}],`你是營養師。根據食物描述或圖片估算每份的三大營養素。只回傳JSON：{"protein":數字,"fat":數字,"carbs":數字,"confidence":"高/中/低"}。不含熱量欄位。`);
-      setResult(JSON.parse(text.replace(/```json|```/g,"").trim()));
-    }catch{setErr("AI 分析失敗，請重試");}
-    setLoading(false);
-  };
-  const handleAdd=()=>{
-    onAdd(date,{desc:desc||"食物",protein:+result.protein||0,fat:+result.fat||0,carbs:+result.carbs||0,time:new Date().toLocaleTimeString("zh-TW",{hour:"2-digit",minute:"2-digit"})});
-  };
-  const confColor=result?.confidence==="高"?"#22c55e":result?.confidence==="中"?"#f59e0b":"#ef4444";
-  return (
-    <div style={css.overlay} onClick={onClose}>
-      <div style={css.sheet} onClick={e=>e.stopPropagation()}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-          <b style={{fontSize:17}}>🍽 新增飲食</b>
-          <button onClick={onClose} style={{...css.btn("#f5f5f5","#666"),minHeight:36,padding:"0 12px",borderRadius:8,fontSize:18}}>×</button>
-        </div>
-        <div style={{marginBottom:14}}><div style={css.label}>日期</div><DateNav date={date} setDate={setDate}/></div>
-        <div style={{marginBottom:14}}>
-          <div style={css.label}>描述</div>
-          <input value={desc} onChange={e=>setDesc(e.target.value)} placeholder="例：麥當勞大麥克、滷肉飯小碗..." style={css.input}/>
-        </div>
-        <ImageUploadRow label="食物圖片（可選）" onImage={setImg}/>
-        <button onClick={handleAI} disabled={loading||(!desc&&!img)}
-          style={{...css.btn(loading?"#e5e5e5":"#7c3aed"),width:"100%",minHeight:48,borderRadius:12,marginBottom:12,opacity:(!desc&&!img)?0.5:1}}>
-          {loading?"⏳ 分析中...":"🤖 AI 分析營養素"}
-        </button>
-        {err&&<div style={{color:"#ef4444",fontSize:13,marginBottom:10}}>{err}</div>}
-        {result&&(
-          <div style={{background:"#f8f9ff",borderRadius:12,padding:14,marginBottom:14}}>
-            <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}>
-              <b style={{fontSize:14}}>分析結果</b>
-              <span style={{background:confColor,color:"#fff",borderRadius:20,padding:"2px 10px",fontSize:12,fontWeight:600}}>信心度 {result.confidence}</span>
-            </div>
-            <div style={{display:"flex",gap:8}}>
-              {[["蛋白質",result.protein,"g","#3b82f6"],["脂肪",result.fat,"g","#f59e0b"],["碳水",result.carbs,"g","#a78bfa"],["熱量",calcCal(result.protein,result.fat,result.carbs),"kcal","#22c55e"]].map(([l,v,u,c])=>(
-                <div key={l} style={{flex:1,textAlign:"center",background:"#fff",borderRadius:10,padding:"8px 4px"}}>
-                  <div style={{fontSize:18,fontWeight:700,color:c}}>{v}</div>
-                  <div style={{fontSize:10,color:"#888"}}>{l} {u}</div>
-                </div>
-              ))}
-            </div>
-            <div style={{fontSize:11,color:"#aaa",marginTop:8,textAlign:"center"}}>
-              {result.protein}×4 + {result.fat}×9 + {result.carbs}×4 = {calcCal(result.protein,result.fat,result.carbs)} kcal
-            </div>
-          </div>
-        )}
-        <button onClick={handleAdd} disabled={!result}
-          style={{...css.btn(!result?"#e5e5e5":"#007aff"),width:"100%",minHeight:52,borderRadius:13,fontSize:16,fontWeight:700,opacity:!result?0.6:1}}>
-          ✓ 確認新增
-        </button>
-      </div>
-    </div>
-  );
+function HistoryTab(p){var dates=Object.keys(p.allDays).sort().reverse();
+return h("div",{style:{padding:"0 16px"}},h("div",{style:S.card},
+h("span",{style:{fontSize:15,fontWeight:700,display:"block",marginBottom:14}},"歷史紀錄"),
+dates.length===0&&h("div",{style:{color:"var(--text-ter)",fontSize:14,textAlign:"center",padding:"24px 0"}},"尚無歷史紀錄"),
+dates.map(function(d){var day=p.allDays[d],fd=day.food||[],ex=day.exercise||[];
+var pr=fd.reduce(function(s,f){return s+(f.protein||0)},0),ink=fd.reduce(function(s,f){return s+calcCal(f.protein,f.fat,f.carbs)},0),bu=ex.reduce(function(s,e){return s+(e.calories||0)},0),nt=ink-bu;
+return h("button",{key:d,onClick:function(){p.onSelect(d)},style:{display:"flex",justifyContent:"space-between",alignItems:"center",width:"100%",padding:"12px 0",background:"none",border:"none",borderBottom:"1px solid var(--border-light)",cursor:"pointer",fontFamily:"inherit"}},
+h("div",{style:{textAlign:"left"}},h("div",{style:{fontWeight:600,fontSize:14,color:"var(--text)"}},d,"（",weekday(d),"）"),h("div",{style:{fontSize:11,color:"var(--text-sec)",marginTop:3}},"飲食 "+fd.length+" 筆 · 蛋白質 "+pr+"g")),
+h("div",{style:{textAlign:"right"}},h("div",{style:{fontWeight:700,fontSize:17,color:nt>p.goals.calories?"var(--red)":"var(--teal)",fontVariantNumeric:"tabular-nums"}},nt),h("div",{style:{fontSize:10,color:"var(--text-ter)"}},"淨熱量")))})))
 }
 
-function ExerciseSheet({defaultDate,onAdd,onClose}) {
-  const [date,setDate]=useState(defaultDate);
-  const [desc,setDesc]=useState("");
-  const [img,setImg]=useState(null);
-  const [result,setResult]=useState(null);
-  const [loading,setLoading]=useState(false);
-  const [err,setErr]=useState("");
-  const handleAI=async()=>{
-    setLoading(true);setErr("");setResult(null);
-    try{
-      const content=[];
-      if(img){const[h,d]=img.split(",");content.push({type:"image",source:{type:"base64",media_type:h.match(/:(.*?);/)?.[1]||"image/jpeg",data:d}});}
-      content.push({type:"text",text:`運動：${desc||"（根據截圖判斷）"}`});
-      const text=await callAI([{role:"user",content}],`你是健身教練。根據運動描述或Apple Watch截圖解析Active Calories和時長(分鐘)。只回傳JSON：{"calories":數字,"duration":數字}。`);
-      setResult(JSON.parse(text.replace(/```json|```/g,"").trim()));
-    }catch{setErr("AI 解析失敗，請重試");}
-    setLoading(false);
-  };
-  const handleAdd=()=>{
-    onAdd(date,{desc:desc||"運動",calories:+result?.calories||0,duration:+result?.duration||0,time:new Date().toLocaleTimeString("zh-TW",{hour:"2-digit",minute:"2-digit"})});
-  };
-  return (
-    <div style={css.overlay} onClick={onClose}>
-      <div style={css.sheet} onClick={e=>e.stopPropagation()}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-          <b style={{fontSize:17}}>🏃 新增運動</b>
-          <button onClick={onClose} style={{...css.btn("#f5f5f5","#666"),minHeight:36,padding:"0 12px",borderRadius:8,fontSize:18}}>×</button>
-        </div>
-        <div style={{marginBottom:14}}><div style={css.label}>日期</div><DateNav date={date} setDate={setDate}/></div>
-        <div style={{marginBottom:14}}>
-          <div style={css.label}>描述</div>
-          <input value={desc} onChange={e=>setDesc(e.target.value)} placeholder="例：跑步30分鐘、重訓胸背..." style={css.input}/>
-        </div>
-        <ImageUploadRow label="Apple Watch 截圖（可選）" onImage={setImg}/>
-        <button onClick={handleAI} disabled={loading||(!desc&&!img)}
-          style={{...css.btn(loading?"#e5e5e5":"#22c55e"),width:"100%",minHeight:48,borderRadius:12,marginBottom:12,opacity:(!desc&&!img)?0.5:1}}>
-          {loading?"⏳ 解析中...":"🤖 AI 解析運動數據"}
-        </button>
-        {err&&<div style={{color:"#ef4444",fontSize:13,marginBottom:10}}>{err}</div>}
-        {result&&(
-          <div style={{background:"#f0fff4",borderRadius:12,padding:14,marginBottom:14}}>
-            <b style={{fontSize:14,display:"block",marginBottom:10}}>解析結果</b>
-            <div style={{display:"flex",gap:12}}>
-              <div style={{flex:1,textAlign:"center",background:"#fff",borderRadius:10,padding:"10px 0"}}>
-                <div style={{fontSize:24,fontWeight:800,color:"#22c55e"}}>{result.calories}</div>
-                <div style={{fontSize:12,color:"#888"}}>Active Calories</div>
-              </div>
-              <div style={{flex:1,textAlign:"center",background:"#fff",borderRadius:10,padding:"10px 0"}}>
-                <div style={{fontSize:24,fontWeight:800,color:"#3b82f6"}}>{result.duration}</div>
-                <div style={{fontSize:12,color:"#888"}}>時長（分鐘）</div>
-              </div>
-            </div>
-          </div>
-        )}
-        <button onClick={handleAdd} disabled={!result}
-          style={{...css.btn(!result?"#e5e5e5":"#22c55e"),width:"100%",minHeight:52,borderRadius:13,fontSize:16,fontWeight:700,opacity:!result?0.6:1}}>
-          ✓ 確認新增
-        </button>
-      </div>
-    </div>
-  );
+function SettingsSheet(p){
+var _g=useState(A({},p.goals)),g=_g[0],setG=_g[1],_r=useState(p.settings.defaultRules||""),rules=_r[0],setRules=_r[1];
+var _ak=useState(getApiKey()),apiKey=_ak[0],setApiKeyLocal=_ak[1];
+var _s=useState(false),showRaw=_s[0],setShowRaw=_s[1],iRef=useRef();
+var gcal=calcCal(g.protein,g.fat,g.carbs),dc=Object.keys(p.allDays).length;
+var tf=Object.values(p.allDays).reduce(function(s,d){return s+(d.food||[]).length},0);
+var te=Object.values(p.allDays).reduce(function(s,d){return s+(d.exercise||[]).length},0);
+var sg=function(k,v){var u={};u[k]=v;setG(function(prev){return A({},prev,u)})};
+var exportCSV=function(){var rows=[["日期","類型","描述","時間","蛋白質g","脂肪g","碳水g","熱量kcal","消耗kcal","時長min"]];Object.keys(p.allDays).sort().forEach(function(d){var day=p.allDays[d];(day.food||[]).forEach(function(f){rows.push([d,"飲食",f.desc,f.time||"",f.protein,f.fat,f.carbs,calcCal(f.protein,f.fat,f.carbs),"",""])});(day.exercise||[]).forEach(function(e){rows.push([d,"運動",e.desc,e.time||"","","","","",e.calories,e.duration||""])})});var csv="\uFEFF"+rows.map(function(r){return r.map(function(c){return'"'+String(c).replace(/"/g,'""')+'"'}).join(",")}).join("\n");var b=new Blob([csv],{type:"text/csv;charset=utf-8"}),u=URL.createObjectURL(b),a=document.createElement("a");a.href=u;a.download="fitlog_"+todayStr()+".csv";a.click();URL.revokeObjectURL(u);p.showToast("✅ CSV 已匯出")};
+var importCSV=function(e){var file=e.target.files&&e.target.files[0];if(!file)return;var reader=new FileReader();reader.onload=function(ev){try{var lines=ev.target.result.split("\n").map(function(l){return l.trim()}).filter(Boolean);if(lines.length<2){p.showToast("CSV 為空");return}var imp={};for(var i=1;i<lines.length;i++){var cols=(lines[i].match(/("(?:[^"]*"")*[^"]*"|[^,]*)/g)||[]).map(function(c){return c.replace(/^"|"$/g,"").replace(/""/g,'"')});var dt=cols[0],tp=cols[1],ds=cols[2],tm=cols[3];if(!dt)continue;if(!imp[dt])imp[dt]={food:[],exercise:[]};if(tp==="飲食")imp[dt].food.push({id:uid(),desc:ds,time:tm,protein:+cols[4]||0,fat:+cols[5]||0,carbs:+cols[6]||0});else if(tp==="運動")imp[dt].exercise.push({id:uid(),desc:ds,time:tm,calories:+cols[8]||0,duration:+cols[9]||0})}p.onImport(imp);p.showToast("✅ 已匯入 "+Object.keys(imp).length+" 天")}catch(err){p.showToast("匯入失敗")}};reader.readAsText(file)};
+return h("div",{className:"fade-in",style:S.overlay,onClick:p.onClose},
+h("div",{className:"slide-up",style:A({},S.sheet,{maxHeight:"95vh",padding:0}),onClick:function(e){e.stopPropagation()}},
+h("div",{style:{position:"sticky",top:0,background:"var(--card)",padding:"20px 20px 14px",borderBottom:"1px solid var(--border)",borderRadius:"20px 20px 0 0",zIndex:1}},h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center"}},h("div",{style:{fontSize:18,fontWeight:700,fontFamily:"var(--font-display)"}},"設定"),h("button",{onClick:p.onClose,style:A({},S.btn("var(--card-alt)","var(--text-sec)"),{minHeight:32,minWidth:32,padding:0,borderRadius:8,fontSize:15})},"✕"))),
+h("div",{style:{padding:"20px 20px calc(36px + env(safe-area-inset-bottom,12px))"}},
+h("div",{style:{marginBottom:24}},h("div",{style:{fontWeight:700,fontSize:14,marginBottom:4}},"🔑 Gemini API Key"),
+h("div",{style:{fontSize:12,color:"var(--text-ter)",marginBottom:10}},"免費申請：",h("a",{href:"https://aistudio.google.com/apikey",target:"_blank",rel:"noopener",style:{color:"var(--blue)",textDecoration:"underline"}},"Google AI Studio")),
+h("input",{type:"password",value:apiKey,onChange:function(e){setApiKeyLocal(e.target.value)},placeholder:"輸入你的 Gemini API Key",style:A({},S.input,{marginBottom:10})}),
+h("button",{onClick:function(){setApiKey(apiKey);if(p.onApiKeySaved)p.onApiKeySaved();p.showToast("✅ API Key 已儲存")},style:A({},S.btn(),{width:"100%",minHeight:44,borderRadius:"var(--radius-sm)",fontSize:14})},"儲存 API Key")),
+h("div",{style:{fontSize:11,color:"var(--text-ter)",lineHeight:1.55,marginTop:10,padding:"10px 12px",background:"var(--card-alt)",borderRadius:"var(--radius-xs)",border:"1px solid var(--border-light)"}},"🔒 ",h("b",{style:{color:"var(--text)"}},"隱私說明：")," Key 只存在你這台裝置的瀏覽器裡，不會上傳到 FitLog 伺服器（本專案也沒有後端）。但任何人只要能在這台手機開啟開發者工具、或看到你螢幕，就可能看到 Key；若你把網站公開給陌生人用，對方也有機會從瀏覽器取出 Key。",h("br"),h("br"),"建議在 ",h("a",{href:"https://aistudio.google.com/apikey",target:"_blank",rel:"noopener",style:{color:"var(--blue)"}},"Google AI Studio")," 為 Key 設定「",h("b",null,"只允許 Generative Language API"),"」並加上「",h("b",null,"HTTP 網域限制"),"」（填你的 GitHub Pages 網址）。"),
+h("div",{style:{marginBottom:24}},h("div",{style:{fontWeight:700,fontSize:14,marginBottom:12}},"🎯 每日目標"),
+h("div",{style:{display:"flex",gap:8,marginBottom:10}},[["protein","蛋白質 g"],["fat","脂肪 g"],["carbs","碳水 g"]].map(function(x){return h("div",{key:x[0],style:{flex:1}},h("div",{style:A({},S.label,{fontSize:10})},x[1]),h("input",{type:"number",inputMode:"decimal",value:g[x[0]],onChange:function(e){sg(x[0],e.target.value)},style:A({},S.input,{padding:"9px 8px",fontSize:16,textAlign:"center"})}))})),
+h("div",{style:{background:"var(--accent-light)",borderRadius:"var(--radius-xs)",padding:"10px 14px",fontSize:13,color:"var(--accent)",fontWeight:500,textAlign:"center",marginBottom:10,border:"1px solid var(--accent-border)"}},"每日熱量 = "+(g.protein||0)+"×4 + "+(g.fat||0)+"×9 + "+(g.carbs||0)+"×4 = ",h("b",null,gcal+" kcal")),
+h("button",{onClick:function(){p.onSaveGoals({protein:+g.protein||0,fat:+g.fat||0,carbs:+g.carbs||0,calories:gcal})},style:A({},S.btn(),{width:"100%",minHeight:44,borderRadius:"var(--radius-sm)",fontSize:14})},"儲存目標")),
+h("div",{style:{marginBottom:24}},h("div",{style:{fontWeight:700,fontSize:14,marginBottom:4}},"📋 預設估算規則"),h("div",{style:{fontSize:12,color:"var(--text-ter)",marginBottom:10}},"AI 分析食物時會自動套用"),
+h("textarea",{value:rules,onChange:function(e){setRules(e.target.value)},placeholder:"例：飲料預設手搖杯大杯700ml",style:A({},S.input,{minHeight:80,resize:"vertical"})}),
+h("button",{onClick:function(){p.onSaveSettings(A({},p.settings,{defaultRules:rules}))},style:A({},S.btn(),{width:"100%",minHeight:44,borderRadius:"var(--radius-sm)",marginTop:10})},"儲存規則")),
+h("div",{style:{marginBottom:24}},h("div",{style:{fontWeight:700,fontSize:14,marginBottom:12}},"💾 資料管理"),
+h("div",{style:{display:"flex",gap:8,marginBottom:12}},[["📅",dc,"天"],["🍽",tf,"飲食"],["🏃",te,"運動"],["⭐",p.favorites.length,"常用"]].map(function(x){return h("div",{key:x[2],style:{flex:1,textAlign:"center",background:"var(--card-alt)",borderRadius:"var(--radius-xs)",padding:"10px 4px"}},h("div",{style:{fontSize:10}},x[0]),h("div",{style:{fontSize:18,fontWeight:800,color:"var(--text)",fontVariantNumeric:"tabular-nums"}},x[1]),h("div",{style:{fontSize:10,color:"var(--text-ter)"}},x[2]))})),
+h("div",{style:{display:"flex",gap:8,marginBottom:10}},h("button",{onClick:exportCSV,style:A({},S.btn("var(--blue)"),{flex:1,minHeight:44,borderRadius:"var(--radius-sm)",fontSize:14})},"📤 匯出 CSV"),h("input",{ref:iRef,type:"file",accept:".csv",onChange:importCSV,style:{display:"none"}}),h("button",{onClick:function(){iRef.current&&iRef.current.click()},style:A({},S.btn("var(--amber-light)","var(--amber)","1.5px solid var(--amber-border)"),{flex:1,minHeight:44,borderRadius:"var(--radius-sm)",fontSize:14})},"📥 匯入 CSV")),
+h("button",{onClick:function(){setShowRaw(!showRaw)},style:A({},S.btn("var(--card-alt)","var(--text-sec)","1px solid var(--border)"),{width:"100%",minHeight:40,borderRadius:"var(--radius-xs)",fontSize:13,marginTop:4})},showRaw?"隱藏原始資料":"🔍 檢視原始資料"),
+showRaw&&h("div",{className:"fade-up",style:{maxHeight:300,overflowY:"auto",marginTop:10,background:"var(--bg)",borderRadius:"var(--radius-xs)",padding:14,border:"1px solid var(--border)"}},Object.keys(p.allDays).sort().reverse().map(function(d){var day=p.allDays[d];return h("div",{key:d,style:{marginBottom:12}},h("div",{style:{fontWeight:700,fontSize:12,color:"var(--accent)",marginBottom:4}},d,"（",weekday(d),"）"),(day.food||[]).map(function(f){return h("div",{key:f.id,style:{fontSize:11,color:"var(--text-sec)",padding:"2px 0 2px 12px"}},"🍽 "+f.desc+" — P:"+f.protein+" F:"+f.fat+" C:"+f.carbs+" = "+calcCal(f.protein,f.fat,f.carbs)+"kcal"+(f.time?" ("+f.time+")":""))}),(day.exercise||[]).map(function(e){return h("div",{key:e.id,style:{fontSize:11,color:"var(--text-sec)",padding:"2px 0 2px 12px"}},"🏃 "+e.desc+" — "+e.calories+"kcal"+(e.duration?" "+e.duration+"min":"")+(e.time?" ("+e.time+")":""))}))}),dc===0&&h("div",{style:{color:"var(--text-ter)",fontSize:13,textAlign:"center",padding:"14px 0"}},"無資料"))),
+h("button",{onClick:p.onClose,style:A({},S.btn("var(--card-alt)","var(--text-sec)","1px solid var(--border)"),{width:"100%",minHeight:44,borderRadius:"var(--radius-sm)"})},"關閉"))))
 }
 
-function QuickAddSheet({favorites,onAdd,onClose}) {
-  return (
-    <div style={css.overlay} onClick={onClose}>
-      <div style={css.sheet} onClick={e=>e.stopPropagation()}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-          <b style={{fontSize:17}}>⚡ 快速新增常用</b>
-          <button onClick={onClose} style={{...css.btn("#f5f5f5","#666"),minHeight:36,padding:"0 12px",borderRadius:8,fontSize:18}}>×</button>
-        </div>
-        {favorites.length===0&&<div style={{color:"#aaa",textAlign:"center",padding:"24px 0",fontSize:14}}>請先至「常用」頁籤新增常用食物</div>}
-        {favorites.map((fav,i)=>(
-          <button key={i} onClick={()=>onAdd(fav)}
-            style={{display:"flex",width:"100%",alignItems:"center",justifyContent:"space-between",background:"#f8f9ff",border:"none",borderRadius:12,padding:"13px 14px",marginBottom:8,cursor:"pointer",fontFamily:"inherit"}}>
-            <div style={{textAlign:"left"}}>
-              <div style={{fontWeight:600,fontSize:15}}>{fav.name}</div>
-              <div style={{fontSize:12,color:"#888",marginTop:2}}>P {fav.protein}g | F {fav.fat}g | C {fav.carbs}g</div>
-            </div>
-            <div style={{fontWeight:700,fontSize:15,color:"#007aff"}}>{calcCal(fav.protein,fav.fat,fav.carbs)} kcal</div>
-          </button>
-        ))}
-      </div>
-    </div>
-  );
+function ApiKeyBanner(p){
+var _t=useState(0),bump=_t[1];
+if(checkAI())return null;
+if(localStorage.getItem("fl_apikey_banner_dismissed"))return null;
+return h("div",{style:{margin:"10px 16px 0",padding:"12px 14px",background:"var(--amber-light)",border:"1px solid var(--amber-border)",borderRadius:"var(--radius)"}},
+h("div",{style:{display:"flex",alignItems:"flex-start",gap:10}},
+h("div",{style:{flex:1}},h("div",{style:{fontWeight:700,fontSize:13,marginBottom:4,color:"var(--text)"}},"尚未設定 Gemini API Key"),h("div",{style:{fontSize:12,color:"var(--text-sec)",lineHeight:1.45}},"AI 分析／估算需要先儲存 Key（免費額度在 Google AI Studio 申請）。仍可直接用手動輸入記錄。")),
+h("div",{style:{display:"flex",flexDirection:"column",gap:6,flexShrink:0}},
+h("button",{onClick:function(){p.onOpenSettings()},style:A({},S.btn(),{minHeight:36,padding:"0 12px",borderRadius:"var(--radius-xs)",fontSize:12})},"設定"),
+h("button",{onClick:function(){localStorage.setItem("fl_apikey_banner_dismissed","1");bump(function(x){return x+1})},style:{background:"none",border:"none",fontSize:11,color:"var(--text-ter)",cursor:"pointer",padding:"2px 0",textAlign:"right"}},"略過"))))
 }
 
-function FavoritesTab({favorites,onSave,settings,onAddToDay}) {
-  const [adding,setAdding]=useState(false);
-  const [editIdx,setEditIdx]=useState(null);
-  const [form,setForm]=useState({name:"",protein:"",fat:"",carbs:""});
-  const [aiLoading,setAiLoading]=useState(false);
-  const previewCal=calcCal(+form.protein||0,+form.fat||0,+form.carbs||0);
-  const reset=()=>{setForm({name:"",protein:"",fat:"",carbs:""});setAdding(false);setEditIdx(null);};
-  const handleSave=()=>{
-    if(!form.name)return;
-    const item={name:form.name,protein:+form.protein||0,fat:+form.fat||0,carbs:+form.carbs||0};
-    onSave(editIdx!==null?favorites.map((f,i)=>i===editIdx?item:f):[...favorites,item]);
-    reset();
-  };
-  const handleAI=async()=>{
-    if(!form.name)return;
-    setAiLoading(true);
-    try{
-      const text=await callAI([{role:"user",content:`食物：${form.name}\n${settings.defaultRules?"規則："+settings.defaultRules:""}`}],`你是營養師，估算每份的三大營養素。只回傳JSON：{"protein":數字,"fat":數字,"carbs":數字}。`);
-      const j=JSON.parse(text.replace(/```json|```/g,"").trim());
-      setForm(f=>({...f,protein:String(j.protein||""),fat:String(j.fat||""),carbs:String(j.carbs||"")}));
-    }catch{}
-    setAiLoading(false);
-  };
-  return (
-    <div>
-      <div style={css.card}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-          <b style={{fontSize:15}}>⭐ 常用食物</b>
-          {!adding&&editIdx===null&&<button onClick={()=>setAdding(true)} style={{...css.btn("#007aff"),minHeight:36,padding:"0 14px",borderRadius:10,fontSize:13}}>+ 新增</button>}
-        </div>
-        {(adding||editIdx!==null)&&(
-          <div style={{background:"#f8f9ff",borderRadius:12,padding:14,marginBottom:12}}>
-            <input placeholder="食物名稱" value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} style={{...css.input,marginBottom:8}}/>
-            <div style={{display:"flex",gap:8,marginBottom:8}}>
-              {[["protein","蛋白質g"],["fat","脂肪g"],["carbs","碳水g"]].map(([k,l])=>(
-                <input key={k} type="number" placeholder={l} value={form[k]} onChange={e=>setForm(f=>({...f,[k]:e.target.value}))} style={{...css.input,flex:1,padding:"10px 8px",fontSize:14}}/>
-              ))}
-            </div>
-            <div style={{fontSize:13,color:"#666",marginBottom:10}}>熱量 = {form.protein||0}×4 + {form.fat||0}×9 + {form.carbs||0}×4 = <b>{previewCal} kcal</b></div>
-            <div style={{display:"flex",gap:8}}>
-              <button onClick={handleAI} disabled={aiLoading} style={{...css.btn("#f0f4ff","#3b82f6"),flex:1,minHeight:40,borderRadius:10,fontSize:13,border:"1px solid #c7d7fd"}}>
-                {aiLoading?"⏳ 估算中...":"🤖 AI 估算"}
-              </button>
-              <button onClick={handleSave} style={{...css.btn("#007aff"),flex:1,minHeight:40,borderRadius:10,fontSize:13}}>✓ 儲存</button>
-              <button onClick={reset} style={{...css.btn("#f5f5f5","#666"),minHeight:40,padding:"0 14px",borderRadius:10,fontSize:13}}>取消</button>
-            </div>
-          </div>
-        )}
-        {favorites.length===0&&!adding&&<div style={{color:"#aaa",fontSize:14,textAlign:"center",padding:"16px 0"}}>尚未新增常用食物</div>}
-        {favorites.map((fav,i)=>(
-          <div key={i} style={{display:"flex",alignItems:"center",padding:"10px 0",borderBottom:i<favorites.length-1?"1px solid #f0f0f0":"none",gap:8}}>
-            <div style={{flex:1}}>
-              <div style={{fontWeight:600,fontSize:14}}>{fav.name}</div>
-              <div style={{fontSize:12,color:"#888",marginTop:2}}>P {fav.protein}g | F {fav.fat}g | C {fav.carbs}g | {calcCal(fav.protein,fav.fat,fav.carbs)} kcal</div>
-            </div>
-            <button onClick={()=>onAddToDay(fav)} style={{...css.btn("#e8fff0","#22c55e"),minHeight:34,padding:"0 10px",borderRadius:8,fontSize:13,border:"1px solid #bbf7d0"}}>+加入</button>
-            <button onClick={()=>{setEditIdx(i);setForm({name:fav.name,protein:String(fav.protein),fat:String(fav.fat),carbs:String(fav.carbs)});setAdding(false);}} style={{...css.btn("#f0f0f0","#555"),minHeight:34,padding:"0 10px",borderRadius:8,fontSize:13}}>✎</button>
-            <button onClick={()=>onSave(favorites.filter((_,j)=>j!==i))} style={{...css.btn("#fff2f2","#f03"),minHeight:34,padding:"0 10px",borderRadius:8,fontSize:16,border:"1px solid #ffd0d0"}}>×</button>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
+function InstallBanner(){
+var _s=useState(function(){var isStandalone=window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches||window.navigator.standalone;var wasDismissed=localStorage.getItem('fl_pwa_dismissed');return !isStandalone&&!wasDismissed}),show=_s[0],setShow=_s[1];
+var _dp=useState(null),deferredPrompt=_dp[0],setDP=_dp[1];
+useEffect(function(){var handler=function(e){e.preventDefault();setDP(e)};window.addEventListener('beforeinstallprompt',handler);return function(){window.removeEventListener('beforeinstallprompt',handler)}},[]);
+if(!show)return null;
+var isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent)&&!window.MSStream;
+var isIOSChrome=/CriOS/.test(navigator.userAgent);
+var dismiss=function(){setShow(false);localStorage.setItem('fl_pwa_dismissed','1')};
+var install=async function(){if(deferredPrompt){deferredPrompt.prompt();var r=await deferredPrompt.userChoice;if(r.outcome==='accepted')dismiss();setDP(null)}};
+return h("div",{style:{margin:"12px 16px 0",padding:"14px 16px",background:"var(--blue-light)",border:"1px solid var(--blue-border)",borderRadius:"var(--radius)"}},
+h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10}},
+h("div",{style:{flex:1}},
+h("div",{style:{fontWeight:700,fontSize:14,marginBottom:6,color:"var(--text)"}},"📲 安裝 FitLog 到主畫面"),
+isIOS&&isIOSChrome?h("div",{style:{fontSize:12,color:"var(--text-sec)",lineHeight:1.5}},"點 Chrome 右上角 ",h("b",null,"⋯")," → ",h("b",null,"分享")," → ",h("b",null,"加入主畫面"),"（iOS 上建議用 Safari 加入主畫面，相容性較佳）"):
+isIOS?h("div",{style:{fontSize:12,color:"var(--text-sec)",lineHeight:1.5}},"點擊 Safari 底部的 ",h("b",null,"分享按鈕 ⬆")," → 選擇「",h("b",null,"加入主畫面"),"」即可像 App 一樣使用"):
+deferredPrompt?h("button",{onClick:install,style:A({},S.btn("var(--blue)"),{minHeight:36,padding:"0 16px",borderRadius:"var(--radius-xs)",fontSize:13,marginTop:4})},"安裝 App"):
+h("div",{style:{fontSize:12,color:"var(--text-sec)",lineHeight:1.5}},"點擊瀏覽器選單 → 選擇「",h("b",null,"加入主畫面"),"」即可像 App 一樣使用")),
+h("button",{onClick:dismiss,style:{background:"none",border:"none",fontSize:18,color:"var(--text-ter)",cursor:"pointer",padding:"0 0 0 8px",lineHeight:1}},"✕")))
 }
 
-function HistoryTab({history,histLoading,onSelect}) {
-  return (
-    <div style={css.card}>
-      <b style={{fontSize:15,display:"block",marginBottom:12}}>📅 歷史記錄</b>
-      {histLoading&&<div style={{color:"#aaa",fontSize:14,textAlign:"center",padding:"16px 0"}}>⏳ 載入中...</div>}
-      {!histLoading&&history.length===0&&<div style={{color:"#aaa",fontSize:14,textAlign:"center",padding:"16px 0"}}>尚無歷史紀錄</div>}
-      {history.map(d=>(
-        <button key={d.date} onClick={()=>onSelect(d.date)}
-          style={{display:"flex",justifyContent:"space-between",alignItems:"center",width:"100%",padding:"11px 0",background:"none",border:"none",borderBottom:"1px solid #f5f5f5",cursor:"pointer",fontFamily:"inherit"}}>
-          <div style={{textAlign:"left"}}>
-            <div style={{fontWeight:600,fontSize:14}}>{d.date}</div>
-            <div style={{fontSize:12,color:"#888",marginTop:2}}>飲食 {d.foodCount} 筆 | 蛋白質 {d.protein}g</div>
-          </div>
-          <div style={{textAlign:"right"}}>
-            <div style={{fontWeight:700,color:d.net>GOALS.calories?"#ef4444":"#22c55e",fontSize:16}}>{d.net}</div>
-            <div style={{fontSize:11,color:"#aaa"}}>淨熱量</div>
-          </div>
-        </button>
-      ))}
-    </div>
-  );
+function App(){
+var _ad=useState({}),allDays=_ad[0],setAllDays=_ad[1],daysRef=useRef({}),persistQ=useRef(Promise.resolve()),_dt=useState(todayStr()),date=_dt[0],setDate=_dt[1];
+var _tb=useState("records"),tab=_tb[0],setTab=_tb[1],_fv=useState([]),favorites=_fv[0],setFavorites=_fv[1];
+var _gl=useState(DEFAULT_GOALS),goals=_gl[0],setGoals=_gl[1],_st=useState({defaultRules:""}),settings=_st[0],setSettings=_st[1];
+var _ld=useState(true),loading=_ld[0],setLoading=_ld[1],_tt=useState(null),toast=_tt[0],setToast=_tt[1];
+var _sh=useState(null),sheet=_sh[0],setSheet=_sh[1],_cd=useState(null),confirmDel=_cd[0],setConfirmDel=_cd[1];
+var _kb=useState(false),kbOpen=_kb[0],setKbOpen=_kb[1];
+var _ape=useState(0),apiKeyEpoch=_ape[0],bumpApiKeyEpoch=_ape[1];
+var showToast=function(m){setToast(m);setTimeout(function(){setToast(null)},2500)};
+
+useEffect(function(){var kbTimer=null;
+var onF=function(e){if(e.target.tagName==="INPUT"||e.target.tagName==="TEXTAREA"){if(kbTimer){clearTimeout(kbTimer);kbTimer=null}setKbOpen(true);setTimeout(function(){e.target.scrollIntoView({behavior:"smooth",block:"center"})},300)}};
+var onB=function(e){if(e.target.tagName==="INPUT"||e.target.tagName==="TEXTAREA"){if(kbTimer)clearTimeout(kbTimer);kbTimer=setTimeout(function(){setKbOpen(false);kbTimer=null},350)}};
+document.addEventListener("focusin",onF);document.addEventListener("focusout",onB);
+return function(){document.removeEventListener("focusin",onF);document.removeEventListener("focusout",onB);if(kbTimer)clearTimeout(kbTimer)}},[]);
+
+useEffect(function(){(async function(){try{var r=await Promise.all([DB.get("favorites"),DB.get("settings"),DB.get("goals")]);if(r[0])setFavorites(r[0]);if(r[1])setSettings(r[1]);if(r[2])setGoals(r[2]);var keys=await DB.listKeys("day:");var days={};for(var i=0;i<keys.length;i++){var v=await DB.get(keys[i]);if(v)days[keys[i].replace("day:","")]=v}setAllDays(days)}catch(e){}setLoading(false)})()},[]);
+useEffect(function(){daysRef.current=allDays},[allDays]);
+
+var runDayPersist=function(task){var q=persistQ.current.then(function(){return task()}).catch(function(){});persistQ.current=q;return q};
+
+var addFood=function(d,entry){return runDayPersist(function(){var prev=daysRef.current,day=prev[d]||{food:[],exercise:[]},next={food:[].concat(day.food||[],[entry]),exercise:day.exercise||[]},u=A({},prev);u[d]=next;daysRef.current=u;setAllDays(u);return DB.set("day:"+d,next)}).then(function(){if(d!==todayStr())showToast("已新增至 "+d);setSheet(null)})};
+var addExercise=function(d,entry){return runDayPersist(function(){var prev=daysRef.current,day=prev[d]||{food:[],exercise:[]},next={food:day.food||[],exercise:[].concat(day.exercise||[],[entry])},u=A({},prev);u[d]=next;daysRef.current=u;setAllDays(u);return DB.set("day:"+d,next)}).then(function(){if(d!==todayStr())showToast("已新增至 "+d);setSheet(null)})};
+var delFood=function(id){return runDayPersist(function(){var prev=daysRef.current,day=prev[date];if(!day)return Promise.resolve();var next={food:(day.food||[]).filter(function(f){return f.id!==id}),exercise:day.exercise||[]},u=A({},prev);u[date]=next;daysRef.current=u;setAllDays(u);return DB.set("day:"+date,next)}).then(function(){setConfirmDel(null)})};
+var delEx=function(id){return runDayPersist(function(){var prev=daysRef.current,day=prev[date];if(!day)return Promise.resolve();var next={food:day.food||[],exercise:(day.exercise||[]).filter(function(e){return e.id!==id})},u=A({},prev);u[date]=next;daysRef.current=u;setAllDays(u);return DB.set("day:"+date,next)}).then(function(){setConfirmDel(null)})};
+var saveFavs=async function(f){setFavorites(f);await DB.set("favorites",f)};
+var saveGoals=async function(g){setGoals(g);await DB.set("goals",g);showToast("✅ 目標已儲存");setSheet(null)};
+var saveSett=async function(s){setSettings(s);await DB.set("settings",s);showToast("✅ 規則已儲存")};
+var handleImport=function(imp){return runDayPersist(function(){var prev=daysRef.current,m=A({},prev),ent=Object.entries(imp);for(var i=0;i<ent.length;i++){var d=ent[i][0],data=ent[i][1];if(m[d])m[d]={food:[].concat(m[d].food||[],data.food||[]),exercise:[].concat(m[d].exercise||[],data.exercise||[])};else m[d]=data}daysRef.current=m;setAllDays(m);return Promise.all(ent.map(function(en){return DB.set("day:"+en[0],m[en[0]])}))})};
+
+var dayData=allDays[date]||{food:[],exercise:[]},food=dayData.food||[],exercise=dayData.exercise||[];
+var pr=food.reduce(function(s,f){return s+(f.protein||0)},0),ft=food.reduce(function(s,f){return s+(f.fat||0)},0),cb=food.reduce(function(s,f){return s+(f.carbs||0)},0);
+var intake=calcCal(pr,ft,cb),burned=exercise.reduce(function(s,e){return s+(e.calories||0)},0),net=intake-burned;
+
+if(loading)return h("div",{style:{display:"flex",alignItems:"center",justifyContent:"center",height:"100%",background:"var(--bg)"}},
+h("div",{style:{textAlign:"center"}},h("div",{style:{width:48,height:48,borderRadius:12,background:"var(--accent)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 12px",fontSize:24,boxShadow:"0 4px 16px rgba(196,93,44,.25)"}},h("span",{className:"pulse",style:{color:"#fff",fontFamily:"var(--font-display)",fontWeight:900}},"F")),h("div",{style:{fontSize:18,fontWeight:900,color:"var(--text)",fontFamily:"var(--font-display)"}},"FitLog"),h("div",{style:{fontSize:13,color:"var(--text-ter)",marginTop:4}},"載入中…")));
+
+return h("div",{style:{background:"var(--bg)",height:"100%",maxWidth:480,margin:"0 auto",display:"flex",flexDirection:"column",overflow:"hidden"}},
+
+h("div",{id:"fitlog-top",style:{flexShrink:0,zIndex:10,background:"var(--card)",padding:"calc(10px + env(safe-area-inset-top, 0px)) 20px 10px",borderBottom:"1px solid var(--border)",boxShadow:"var(--shadow-sm)"}},
+h("div",{style:{display:"flex",justifyContent:"center",alignItems:"center"}},
+h(DateNav,{date:date,setDate:setDate}))),
+
+h("div",{style:{flex:1,overflowY:"auto",WebkitOverflowScrolling:"touch",overscrollBehavior:"contain"}},
+h(InstallBanner),
+h(ApiKeyBanner,{key:apiKeyEpoch,onOpenSettings:function(){setSheet("settings")}}),
+h("div",{style:{background:"var(--card)",padding:"0 20px 4px",position:"relative"}},
+h("button",{onClick:function(){setSheet("settings")},style:A({},S.btn("var(--card-alt)","var(--text-sec)","1px solid var(--border)"),{minHeight:32,padding:"0 12px",borderRadius:"var(--radius-xs)",fontSize:13,position:"absolute",top:8,right:12,zIndex:2})},"⚙"),
+h("div",{style:{display:"flex",alignItems:"center",justifyContent:"center",padding:"20px 0 12px",gap:24}},
+h("div",{style:{position:"relative",width:120,height:120}},h(RingProgress,{value:net,max:goals.calories,size:120,stroke:8}),
+h("div",{style:{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}},
+h("div",{style:{fontSize:32,fontWeight:900,color:"var(--text)",fontFamily:"var(--font-display)",lineHeight:1,fontVariantNumeric:"tabular-nums",letterSpacing:"-0.03em"}},net),
+h("div",{style:{fontSize:10,color:"var(--text-ter)",fontWeight:500,letterSpacing:"0.06em",textTransform:"uppercase",marginTop:3}},"NET KCAL"))),
+h("div",{style:{display:"flex",flexDirection:"column",gap:8}},[["攝入",intake,"var(--blue)"],["消耗",burned,"var(--teal)"],["目標",goals.calories,"var(--plum)"]].map(function(x){return h("div",{key:x[0],style:{display:"flex",alignItems:"center",gap:8}},h("div",{style:{width:8,height:8,borderRadius:4,background:x[2],flexShrink:0}}),h("span",{style:{fontSize:12,color:"var(--text-sec)",width:28}},x[0]),h("span",{style:{fontSize:14,fontWeight:700,color:"var(--text)",fontVariantNumeric:"tabular-nums"}},x[1]),h("span",{style:{fontSize:10,color:"var(--text-ter)"}},"kcal"))}))),
+h("div",{style:{marginTop:4}},h(MacroBar,{label:"蛋白質",val:pr,goal:goals.protein,color:"var(--blue)"}),h(MacroBar,{label:"脂肪",val:ft,goal:goals.fat,color:"var(--amber)"}),h(MacroBar,{label:"碳水",val:cb,goal:goals.carbs,color:"var(--plum)"})),
+h("div",{style:{display:"flex",borderTop:"1px solid var(--border-light)",marginTop:6}},[["favorites","常用"],["history","歷史"],["records","紀錄"]].map(function(x){return h("button",{key:x[0],style:S.tabBtn(tab===x[0]),onClick:function(){setTab(x[0])}},x[1])}))),
+
+h("div",{style:{padding:"14px 0 16px"}},
+tab==="records"&&h("div",null,
+h("div",{style:{margin:"0 16px 14px"}},
+h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10,padding:"0 2px"}},h("span",{style:{fontSize:15,fontWeight:700,color:"var(--text)"}},"飲食紀錄"),h("span",{style:{fontSize:12,color:"var(--text-sec)",fontVariantNumeric:"tabular-nums"}},food.length+" 筆 · "+intake+" kcal")),
+food.length===0&&h("div",{style:A({},S.cardFlat,{padding:"32px 0",textAlign:"center",color:"var(--text-ter)",fontSize:14})},"尚無飲食紀錄",h("br"),h("span",{style:{fontSize:12}},"點下方按鈕開始記錄")),
+food.map(function(f){var cal=calcCal(f.protein,f.fat,f.carbs),isDel=confirmDel&&confirmDel.type==="food"&&confirmDel.id===f.id;
+return h("div",{key:f.id,style:A({},S.card,{padding:0,overflow:"hidden"})},
+h("div",{style:{display:"flex",alignItems:"center",padding:"14px 16px 12px",gap:10}},
+h("div",{style:{flex:1,minWidth:0}},h("div",{style:{fontWeight:700,fontSize:15,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",color:"var(--text)"}},f.desc),
+h("div",{style:{display:"flex",alignItems:"center",gap:6,marginTop:4}},f.time&&h("span",{style:{fontSize:10,color:"var(--text-ter)",background:"var(--card-alt)",borderRadius:5,padding:"2px 7px",fontVariantNumeric:"tabular-nums"}},f.time),h("span",{style:{fontSize:12,fontWeight:700,color:"var(--blue)",fontVariantNumeric:"tabular-nums"}},cal+" kcal"))),
+isDel?h("div",{style:{display:"flex",gap:6,flexShrink:0}},h("button",{onClick:function(){delFood(f.id)},style:A({},S.btn("var(--red)"),{minHeight:32,padding:"0 12px",borderRadius:8,fontSize:13})},"刪除"),h("button",{onClick:function(){setConfirmDel(null)},style:A({},S.btn("var(--card-alt)","var(--text-sec)","1px solid var(--border)"),{minHeight:32,padding:"0 12px",borderRadius:8,fontSize:13})},"取消")):h("button",{onClick:function(){setConfirmDel({type:"food",id:f.id})},style:A({},S.btn("var(--red-light)","var(--red)","1px solid var(--red-border)"),{minHeight:32,minWidth:32,padding:0,borderRadius:8,fontSize:14,flexShrink:0})},"×")),
+h("div",{style:{display:"flex",borderTop:"1px solid var(--border-light)"}},[["蛋白質",f.protein,"g","var(--blue)"],["脂肪",f.fat,"g","var(--amber)"],["碳水",f.carbs,"g","var(--plum)"]].map(function(x,idx){return h("div",{key:x[0],style:{flex:1,textAlign:"center",padding:"8px 0",borderRight:idx<2?"1px solid var(--border-light)":"none"}},h("div",{style:{fontSize:15,fontWeight:700,color:x[3],fontVariantNumeric:"tabular-nums"}},x[1],h("span",{style:{fontSize:10,fontWeight:400}},x[2])),h("div",{style:{fontSize:10,color:"var(--text-ter)"}},x[0]))})))})),
+h("div",{style:{margin:"8px 16px 14px"}},
+h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10,padding:"0 2px"}},h("span",{style:{fontSize:15,fontWeight:700,color:"var(--text)"}},"運動紀錄"),h("span",{style:{fontSize:12,color:"var(--text-sec)",fontVariantNumeric:"tabular-nums"}},exercise.length+" 筆 · -"+burned+" kcal")),
+exercise.length===0&&h("div",{style:A({},S.cardFlat,{padding:"32px 0",textAlign:"center",color:"var(--text-ter)",fontSize:14})},"尚無運動紀錄",h("br"),h("span",{style:{fontSize:12}},"點下方按鈕開始記錄")),
+exercise.map(function(e){var isDel=confirmDel&&confirmDel.type==="exercise"&&confirmDel.id===e.id;
+return h("div",{key:e.id,style:A({},S.card,{padding:0,overflow:"hidden"})},
+h("div",{style:{display:"flex",alignItems:"center",padding:"14px 16px 12px",gap:10}},
+h("div",{style:{flex:1,minWidth:0}},h("div",{style:{fontWeight:700,fontSize:15,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",color:"var(--text)"}},e.desc),h("div",{style:{display:"flex",alignItems:"center",gap:6,marginTop:4}},e.time&&h("span",{style:{fontSize:10,color:"var(--text-ter)",background:"var(--card-alt)",borderRadius:5,padding:"2px 7px",fontVariantNumeric:"tabular-nums"}},e.time))),
+isDel?h("div",{style:{display:"flex",gap:6,flexShrink:0}},h("button",{onClick:function(){delEx(e.id)},style:A({},S.btn("var(--red)"),{minHeight:32,padding:"0 12px",borderRadius:8,fontSize:13})},"刪除"),h("button",{onClick:function(){setConfirmDel(null)},style:A({},S.btn("var(--card-alt)","var(--text-sec)","1px solid var(--border)"),{minHeight:32,padding:"0 12px",borderRadius:8,fontSize:13})},"取消")):h("button",{onClick:function(){setConfirmDel({type:"exercise",id:e.id})},style:A({},S.btn("var(--red-light)","var(--red)","1px solid var(--red-border)"),{minHeight:32,minWidth:32,padding:0,borderRadius:8,fontSize:14,flexShrink:0})},"×")),
+h("div",{style:{display:"flex",borderTop:"1px solid var(--border-light)"}},
+h("div",{style:{flex:1,textAlign:"center",padding:"8px 0",borderRight:"1px solid var(--border-light)"}},h("div",{style:{fontSize:18,fontWeight:800,color:"var(--teal)",fontVariantNumeric:"tabular-nums"}},e.calories,h("span",{style:{fontSize:10,fontWeight:400}},"kcal")),h("div",{style:{fontSize:10,color:"var(--text-ter)"}},"消耗熱量")),
+h("div",{style:{flex:1,textAlign:"center",padding:"8px 0"}},h("div",{style:{fontSize:18,fontWeight:800,color:"var(--blue)",fontVariantNumeric:"tabular-nums"}},e.duration||"—",h("span",{style:{fontSize:10,fontWeight:400}},e.duration?"min":"")),h("div",{style:{fontSize:10,color:"var(--text-ter)"}},"運動時長"))))}))),
+
+tab==="favorites"&&h(FavoritesTab,{favorites:favorites,onSave:saveFavs,settings:settings,showToast:showToast,onAddToDay:async function(fav){await addFood(date,{id:uid(),desc:fav.name,protein:fav.protein,fat:fav.fat,carbs:fav.carbs,time:new Date().toLocaleTimeString("zh-TW",{hour:"2-digit",minute:"2-digit"})});showToast("已加入 "+fav.name)}}),
+tab==="history"&&h(HistoryTab,{allDays:allDays,goals:goals,onSelect:function(d){setDate(d);setTab("records")}}))),
+
+!kbOpen&&!sheet&&h("div",{style:{flexShrink:0,background:"var(--card)",borderTop:"1px solid var(--border)",padding:"8px 12px calc(12px + env(safe-area-inset-bottom, 0px))",boxShadow:"0 -4px 16px rgba(44,37,24,.06)"}},
+h("div",{style:{display:"flex",gap:6}},
+h("button",{style:A({},S.btn("var(--teal)"),{flex:1,minHeight:46,borderRadius:"var(--radius-sm)",fontSize:14,fontWeight:700}),onClick:function(){setSheet("exercise")}},"+運動"),
+h("button",{style:A({},S.btn("var(--card-alt)","var(--accent)","1.5px solid var(--accent-border)"),{flex:1,minHeight:46,borderRadius:"var(--radius-sm)",fontSize:14,fontWeight:600}),onClick:function(){setSheet("quickadd")}},"⚡常用"),
+h("button",{style:A({},S.btn(),{flex:1,minHeight:46,borderRadius:"var(--radius-sm)",fontSize:14,fontWeight:700}),onClick:function(){setSheet("food")}},"+飲食"))),
+
+sheet==="food"&&h(FoodSheet,{defaultDate:date,settings:settings,onAdd:addFood,onClose:function(){setSheet(null)}}),
+sheet==="exercise"&&h(ExerciseSheet,{defaultDate:date,onAdd:addExercise,onClose:function(){setSheet(null)}}),
+sheet==="quickadd"&&h(QuickAddSheet,{favorites:favorites,onAdd:async function(fav){await addFood(date,{id:uid(),desc:fav.name,protein:fav.protein,fat:fav.fat,carbs:fav.carbs,time:new Date().toLocaleTimeString("zh-TW",{hour:"2-digit",minute:"2-digit"})});setSheet(null);showToast("已加入 "+fav.name)},onReorder:saveFavs,onClose:function(){setSheet(null)}}),
+sheet==="settings"&&h(SettingsSheet,{goals:goals,settings:settings,onSaveGoals:saveGoals,onSaveSettings:saveSett,onClose:function(){setSheet(null)},allDays:allDays,favorites:favorites,onImport:handleImport,showToast:showToast,onApiKeySaved:function(){localStorage.removeItem("fl_apikey_banner_dismissed");bumpApiKeyEpoch(function(x){return x+1})}}),
+toast&&h("div",{className:"fade-in",style:S.toast},toast));
 }
 
-function SettingsSheet({settings,onSave,onClose,onDisconnect}) {
-  const [rules,setRules]=useState(settings.defaultRules||"");
-  return (
-    <div style={css.overlay} onClick={onClose}>
-      <div style={css.sheet} onClick={e=>e.stopPropagation()}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
-          <b style={{fontSize:17}}>⚙ 目標設定</b>
-          <button onClick={onClose} style={{...css.btn("#f5f5f5","#666"),minHeight:36,padding:"0 12px",borderRadius:8,fontSize:18}}>×</button>
-        </div>
-        {[["每日熱量目標",`${GOALS.calories} kcal`,"由三大營養素自動計算"],["蛋白質目標",`${GOALS.protein} g`,""],["脂肪上限",`${GOALS.fat} g`,""],["碳水目標",`${GOALS.carbs} g`,""]].map(([l,v,note])=>(
-          <div key={l} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"13px 0",borderBottom:"1px solid #f0f0f0"}}>
-            <div>
-              <div style={{fontWeight:600,fontSize:14}}>{l}</div>
-              {note&&<div style={{fontSize:12,color:"#aaa",marginTop:2}}>{note}</div>}
-            </div>
-            <div style={{fontWeight:700,fontSize:16,color:"#007aff"}}>{v}</div>
-          </div>
-        ))}
-        <div style={{marginTop:16,padding:14,background:"#f8f9ff",borderRadius:12,fontSize:13,color:"#666",lineHeight:1.7}}>
-          熱量公式：{GOALS.protein}×4 + {GOALS.fat}×9 + {GOALS.carbs}×4 = {calcCal(GOALS.protein,GOALS.fat,GOALS.carbs)} kcal ✓
-        </div>
-        <div style={{marginTop:16}}>
-          <div style={{fontWeight:600,fontSize:14,marginBottom:4}}>📋 預設估算規則</div>
-          <div style={{fontSize:12,color:"#aaa",marginBottom:8}}>AI 分析食物時會自動套用</div>
-          <textarea value={rules} onChange={e=>setRules(e.target.value)} placeholder="例：飲料預設手搖杯大杯700ml，雞胸肉預設100g水煮" style={{...css.input,minHeight:80,resize:"vertical"}}/>
-          <button onClick={()=>onSave({...settings,defaultRules:rules})} style={{...css.btn("#007aff"),width:"100%",minHeight:44,borderRadius:12,marginTop:8}}>儲存規則</button>
-        </div>
-        <button onClick={onDisconnect} style={{...css.btn("#fff2f2","#f03"),width:"100%",minHeight:44,borderRadius:12,marginTop:10,border:"1px solid #ffd0d0",fontSize:13}}>
-          重新設定 Google Sheets 連線
-        </button>
-        <button onClick={onClose} style={{...css.btn("#f5f5f5","#555"),width:"100%",minHeight:44,borderRadius:12,marginTop:8}}>關閉</button>
-      </div>
-    </div>
-  );
-}
-
-function App() {
-  const [apiUrl,setApiUrl]   = useState(()=>loadApiUrl());
-  const [isReady,setIsReady] = useState(()=>!!loadApiUrl());
-  const [date,setDate]       = useState(todayStr());
-  const [tab,setTab]         = useState("records");
-  const [dayData,setDayData] = useState({food:[],exercise:[]});
-  const [history,setHistory] = useState([]);
-  const [histLoading,setHistLoading] = useState(false);
-  const [favorites,setFavorites]     = useState([]);
-  const [settings,setSettings]       = useState({defaultRules:""});
-  const [loading,setLoading]   = useState(false);
-  const [toast,setToast]       = useState(null);
-  const [sheet,setSheet]       = useState(null);
-  const [confirmDel,setConfirmDel] = useState(null);
-  const [kbOpen,setKbOpen]     = useState(false);
-
-  useEffect(()=>{
-    const check=()=>setKbOpen(window.innerHeight-(window.visualViewport?.height||window.innerHeight)>150);
-    const vp=window.visualViewport;
-    if(vp){vp.addEventListener("resize",check);return()=>vp.removeEventListener("resize",check);}
-  },[]);
-
-  useEffect(()=>{
-    if(!isReady||!apiUrl)return;
-    loadDay(date);
-    loadFavsAndSettings();
-  },[isReady]);
-
-  useEffect(()=>{
-    if(!isReady||!apiUrl)return;
-    loadDay(date);
-  },[date]);
-
-  useEffect(()=>{
-    if(tab==="history"&&isReady&&history.length===0)loadHistory();
-  },[tab]);
-
-  const api=async(params)=>{
-    const u=new URL(apiUrl);
-    Object.entries(params).forEach(([k,v])=>u.searchParams.set(k,typeof v==="object"?JSON.stringify(v):String(v)));
-    const res=await fetch(u.toString());
-    return res.json();
-  };
-
-  const showToast=msg=>{setToast(msg);setTimeout(()=>setToast(null),2500);};
-
-  const loadDay=async(d)=>{
-    setLoading(true);
-    try{const data=await api({action:"getDay",date:d});setDayData(data);}
-    catch{showToast("載入失敗，請檢查網路");}
-    setLoading(false);
-  };
-
-  const loadHistory=async()=>{
-    setHistLoading(true);
-    try{const data=await api({action:"getHistory"});setHistory(data||[]);}
-    catch{}
-    setHistLoading(false);
-  };
-
-  const loadFavsAndSettings=async()=>{
-    try{
-      const[favs,sett]=await Promise.all([api({action:"getFavorites"}),api({action:"getSettings"})]);
-      setFavorites(Array.isArray(favs)?favs:[]);
-      setSettings(sett||{defaultRules:""});
-    }catch{}
-  };
-
-  const addFood=async(d,entry)=>{
-    try{
-      const res=await api({action:"addLog",date:d,type:"food",entry});
-      const newEntry={...entry,id:res.id};
-      if(d===date)setDayData(prev=>({...prev,food:[...(prev.food||[]),newEntry]}));
-      if(d!==todayStr())showToast(`已新增至 ${d}`);
-      if(history.length>0)loadHistory();
-    }catch{showToast("新增失敗");}
-    setSheet(null);
-  };
-
-  const addExercise=async(d,entry)=>{
-    try{
-      const res=await api({action:"addLog",date:d,type:"exercise",entry});
-      const newEntry={...entry,id:res.id};
-      if(d===date)setDayData(prev=>({...prev,exercise:[...(prev.exercise||[]),newEntry]}));
-      if(d!==todayStr())showToast(`已新增至 ${d}`);
-      if(history.length>0)loadHistory();
-    }catch{showToast("新增失敗");}
-    setSheet(null);
-  };
-
-  const delFood=async(id)=>{
-    try{
-      await api({action:"deleteLog",id});
-      setDayData(prev=>({...prev,food:(prev.food||[]).filter(f=>f.id!==id)}));
-      if(history.length>0)loadHistory();
-    }catch{showToast("刪除失敗");}
-    setConfirmDel(null);
-  };
-
-  const delEx=async(id)=>{
-    try{
-      await api({action:"deleteLog",id});
-      setDayData(prev=>({...prev,exercise:(prev.exercise||[]).filter(e=>e.id!==id)}));
-      if(history.length>0)loadHistory();
-    }catch{showToast("刪除失敗");}
-    setConfirmDel(null);
-  };
-
-  const saveFavs=async(favs)=>{
-    setFavorites(favs);
-    try{await api({action:"saveFavorites",data:favs});}catch{showToast("儲存失敗");}
-  };
-
-  const saveSett=async(s)=>{
-    setSettings(s);
-    try{await api({action:"saveSettings",data:s});showToast("已儲存");}catch{showToast("儲存失敗");}
-    setSheet(null);
-  };
-
-  const handleSetup=async(url)=>{
-    try{
-      const u=new URL(url);
-      u.searchParams.set("action","ping");
-      const res=await fetch(u.toString());
-      const text=await res.text();
-      let data;
-      try{data=JSON.parse(text);}catch{showToast("回應格式錯誤："+text.slice(0,60));return;}
-      if(data.status==="ok"){
-        saveApiUrl(url);
-        setApiUrl(url);
-        setIsReady(true);
-      }else{
-        showToast("連線失敗："+JSON.stringify(data).slice(0,60));
-      }
-    }catch(err){
-      showToast("無法連線："+err.message);
-    }
-  };
-
-  const handleDisconnect=()=>{
-    saveApiUrl("");
-    setApiUrl("");setIsReady(false);setSheet(null);
-    setDayData({food:[],exercise:[]});setHistory([]);
-  };
-
-  if(!isReady)return <SetupScreen onSetup={handleSetup} toast={toast}/>;
-
-  const food=dayData.food||[];
-  const exercise=dayData.exercise||[];
-  const p=food.reduce((s,f)=>s+(f.protein||0),0);
-  const fat=food.reduce((s,f)=>s+(f.fat||0),0);
-  const c=food.reduce((s,f)=>s+(f.carbs||0),0);
-  const intake=calcCal(p,fat,c);
-  const burned=exercise.reduce((s,e)=>s+(e.calories||0),0);
-  const net=intake-burned;
-  const calColor=net<=GOALS.calories*0.85?"#22c55e":net<=GOALS.calories?"#f59e0b":"#ef4444";
-
-  return (
-    <div style={css.app}>
-      <div style={{background:"#fff",padding:"14px 16px 0",boxShadow:"0 1px 3px rgba(0,0,0,0.06)"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-          <span style={{fontSize:19,fontWeight:800}}>🥗 FitLog</span>
-          <button onClick={()=>setSheet("settings")} style={{...css.btn("#f0f0f0","#333"),minHeight:36,padding:"0 14px",borderRadius:10,fontSize:13}}>⚙ 設定</button>
-        </div>
-        <DateNav date={date} setDate={setDate}/>
-        <div style={{textAlign:"center",padding:"12px 0 6px"}}>
-          <div style={{fontSize:52,fontWeight:900,color:calColor,lineHeight:1}}>{loading?"…":net}</div>
-          <div style={{fontSize:13,color:"#888",marginTop:2}}>淨攝入熱量 kcal</div>
-        </div>
-        <div style={{display:"flex",gap:8,marginBottom:10}}>
-          {[["攝入",intake,"#3b82f6"],["消耗",burned,"#22c55e"],["目標",GOALS.calories,"#a78bfa"]].map(([l,v,color])=>(
-            <div key={l} style={{flex:1,background:"#f8f8f8",borderRadius:10,padding:"8px 6px",textAlign:"center"}}>
-              <div style={{fontSize:18,fontWeight:700,color}}>{v}</div>
-              <div style={{fontSize:11,color:"#888"}}>{l} kcal</div>
-            </div>
-          ))}
-        </div>
-        <div style={{paddingBottom:8}}>
-          <MacroBar label="蛋白質" val={p} goal={GOALS.protein} color="#3b82f6"/>
-          <MacroBar label="脂肪"   val={fat} goal={GOALS.fat}   color="#f59e0b"/>
-          <MacroBar label="碳水"   val={c}   goal={GOALS.carbs} color="#a78bfa"/>
-        </div>
-        <div style={{display:"flex",borderTop:"1px solid #f0f0f0"}}>
-          {[["favorites","常用"],["history","歷史"],["records","紀錄"]].map(([k,l])=>(
-            <button key={k} style={css.tab(tab===k)} onClick={()=>setTab(k)}>{l}</button>
-          ))}
-        </div>
-      </div>
-
-      <div style={{padding:"12px 0 0"}}>
-        {tab==="records"&&(
-          <div>
-            <div style={{margin:"0 12px 12px"}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8,padding:"0 2px"}}>
-                <span style={{fontSize:15,fontWeight:700}}>🍽 飲食紀錄</span>
-                <span style={{fontSize:12,color:"#888"}}>{food.length} 筆 · {intake} kcal</span>
-              </div>
-              {food.length===0&&(
-                <div style={{background:"#fff",borderRadius:14,boxShadow:"0 1px 4px rgba(0,0,0,0.06)",padding:"28px 0",textAlign:"center",color:"#bbb",fontSize:14}}>
-                  {loading?"⏳ 載入中...":"尚無飲食紀錄"}<br/>
-                  {!loading&&<span style={{fontSize:12,marginTop:4,display:"block"}}>點下方「+ 新增飲食」開始記錄</span>}
-                </div>
-              )}
-              {food.map(f=>{
-                const cal=calcCal(f.protein,f.fat,f.carbs);
-                const isDel=confirmDel?.type==="food"&&confirmDel?.id===f.id;
-                return (
-                  <div key={f.id} style={{background:"#fff",borderRadius:14,boxShadow:"0 1px 4px rgba(0,0,0,0.07)",marginBottom:8,overflow:"hidden"}}>
-                    <div style={{display:"flex",alignItems:"center",padding:"12px 14px 10px",gap:10}}>
-                      <div style={{flex:1,minWidth:0}}>
-                        <div style={{fontWeight:700,fontSize:15,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{f.desc}</div>
-                        <div style={{display:"flex",alignItems:"center",gap:6,marginTop:3}}>
-                          {f.time&&<span style={{fontSize:11,color:"#bbb",background:"#f5f5f5",borderRadius:5,padding:"1px 6px"}}>{f.time}</span>}
-                          <span style={{fontSize:12,fontWeight:700,color:"#3b82f6"}}>{cal} kcal</span>
-                        </div>
-                      </div>
-                      {isDel?(
-                        <div style={{display:"flex",gap:6,flexShrink:0}}>
-                          <button onClick={()=>delFood(f.id)} style={{...css.btn("#ef4444"),minHeight:34,padding:"0 12px",borderRadius:9,fontSize:13}}>刪除</button>
-                          <button onClick={()=>setConfirmDel(null)} style={{...css.btn("#f0f0f0","#555"),minHeight:34,padding:"0 12px",borderRadius:9,fontSize:13}}>取消</button>
-                        </div>
-                      ):(
-                        <button onClick={()=>setConfirmDel({type:"food",id:f.id})} style={{...css.btn("#fff2f2","#f03"),minHeight:34,minWidth:34,padding:"0",borderRadius:9,fontSize:17,border:"1px solid #ffd0d0",flexShrink:0}}>×</button>
-                      )}
-                    </div>
-                    <div style={{display:"flex",borderTop:"1px solid #f5f5f5"}}>
-                      {[["蛋白質",f.protein,"g","#3b82f6"],["脂肪",f.fat,"g","#f59e0b"],["碳水",f.carbs,"g","#a78bfa"]].map(([l,v,u,col])=>(
-                        <div key={l} style={{flex:1,textAlign:"center",padding:"8px 0",borderRight:l!=="碳水"?"1px solid #f5f5f5":"none"}}>
-                          <div style={{fontSize:15,fontWeight:700,color:col}}>{v}<span style={{fontSize:11,fontWeight:400}}>{u}</span></div>
-                          <div style={{fontSize:11,color:"#aaa",marginTop:1}}>{l}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            <div style={{margin:"4px 12px 12px"}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8,padding:"0 2px"}}>
-                <span style={{fontSize:15,fontWeight:700}}>🏃 運動紀錄</span>
-                <span style={{fontSize:12,color:"#888"}}>{exercise.length} 筆 · -{burned} kcal</span>
-              </div>
-              {exercise.length===0&&(
-                <div style={{background:"#fff",borderRadius:14,boxShadow:"0 1px 4px rgba(0,0,0,0.06)",padding:"28px 0",textAlign:"center",color:"#bbb",fontSize:14}}>
-                  {loading?"⏳ 載入中...":"尚無運動紀錄"}<br/>
-                  {!loading&&<span style={{fontSize:12,marginTop:4,display:"block"}}>點下方「+ 新增運動」開始記錄</span>}
-                </div>
-              )}
-              {exercise.map(e=>{
-                const isDel=confirmDel?.type==="exercise"&&confirmDel?.id===e.id;
-                return (
-                  <div key={e.id} style={{background:"#fff",borderRadius:14,boxShadow:"0 1px 4px rgba(0,0,0,0.07)",marginBottom:8,overflow:"hidden"}}>
-                    <div style={{display:"flex",alignItems:"center",padding:"12px 14px 10px",gap:10}}>
-                      <div style={{flex:1,minWidth:0}}>
-                        <div style={{fontWeight:700,fontSize:15,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{e.desc}</div>
-                        <div style={{display:"flex",alignItems:"center",gap:6,marginTop:3}}>
-                          {e.time&&<span style={{fontSize:11,color:"#bbb",background:"#f5f5f5",borderRadius:5,padding:"1px 6px"}}>{e.time}</span>}
-                        </div>
-                      </div>
-                      {isDel?(
-                        <div style={{display:"flex",gap:6,flexShrink:0}}>
-                          <button onClick={()=>delEx(e.id)} style={{...css.btn("#ef4444"),minHeight:34,padding:"0 12px",borderRadius:9,fontSize:13}}>刪除</button>
-                          <button onClick={()=>setConfirmDel(null)} style={{...css.btn("#f0f0f0","#555"),minHeight:34,padding:"0 12px",borderRadius:9,fontSize:13}}>取消</button>
-                        </div>
-                      ):(
-                        <button onClick={()=>setConfirmDel({type:"exercise",id:e.id})} style={{...css.btn("#fff2f2","#f03"),minHeight:34,minWidth:34,padding:"0",borderRadius:9,fontSize:17,border:"1px solid #ffd0d0",flexShrink:0}}>×</button>
-                      )}
-                    </div>
-                    <div style={{display:"flex",borderTop:"1px solid #f5f5f5"}}>
-                      <div style={{flex:1,textAlign:"center",padding:"8px 0",borderRight:"1px solid #f5f5f5"}}>
-                        <div style={{fontSize:18,fontWeight:800,color:"#22c55e"}}>{e.calories}<span style={{fontSize:11,fontWeight:400}}>kcal</span></div>
-                        <div style={{fontSize:11,color:"#aaa",marginTop:1}}>消耗熱量</div>
-                      </div>
-                      <div style={{flex:1,textAlign:"center",padding:"8px 0"}}>
-                        <div style={{fontSize:18,fontWeight:800,color:"#64748b"}}>{e.duration||"—"}<span style={{fontSize:11,fontWeight:400}}>{e.duration?"分鐘":""}</span></div>
-                        <div style={{fontSize:11,color:"#aaa",marginTop:1}}>運動時長</div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-        {tab==="history"&&<HistoryTab history={history} histLoading={histLoading} onSelect={d=>{setDate(d);setTab("records");}}/>}
-        {tab==="favorites"&&<FavoritesTab favorites={favorites} onSave={saveFavs} settings={settings} onAddToDay={async fav=>{await addFood(date,{...fav,desc:fav.name,time:new Date().toLocaleTimeString("zh-TW",{hour:"2-digit",minute:"2-digit"})});showToast(`已加入 ${fav.name}`);}}/>}
-      </div>
-
-      {!kbOpen&&tab!=="favorites"&&(
-        <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:480,background:"#fff",borderTop:"1px solid #eee",padding:"12px 12px 24px",zIndex:20}}>
-          <div style={{display:"flex",gap:8,marginBottom:8}}>
-            <button style={css.btn52("#22c55e")} onClick={()=>setSheet("exercise")}>+ 新增運動</button>
-            <button style={css.btn52("#007aff")} onClick={()=>setSheet("food")}>+ 新增飲食</button>
-          </div>
-          <button style={{...css.btn("#f97316"),width:"100%",minHeight:48,borderRadius:12,fontSize:15}} onClick={()=>setSheet("quickadd")}>
-            ⚡ 快速新增常用
-          </button>
-        </div>
-      )}
-
-      {sheet==="food"&&<FoodSheet defaultDate={date} settings={settings} onAdd={addFood} onClose={()=>setSheet(null)}/>}
-      {sheet==="exercise"&&<ExerciseSheet defaultDate={date} onAdd={addExercise} onClose={()=>setSheet(null)}/>}
-      {sheet==="quickadd"&&<QuickAddSheet favorites={favorites} onAdd={async fav=>{await addFood(date,{...fav,desc:fav.name,time:new Date().toLocaleTimeString("zh-TW",{hour:"2-digit",minute:"2-digit"})});setSheet(null);showToast(`已加入 ${fav.name}`);}} onClose={()=>setSheet(null)}/>}
-      {sheet==="settings"&&<SettingsSheet settings={settings} onSave={saveSett} onClose={()=>setSheet(null)} onDisconnect={handleDisconnect}/>}
-
-      {toast&&<div style={css.toast}>{toast}</div>}
-    </div>
-  );
-}
-
-ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+ReactDOM.createRoot(document.getElementById("root")).render(h(App));
+if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(function(){})}
 </script>
 </body>
 </html>
