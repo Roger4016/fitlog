@@ -257,11 +257,13 @@ h("div",{style:{background:"var(--border-light)",borderRadius:6,height:6,overflo
 h("div",{style:{width:pct+"%",background:ov?"var(--red)":p.color,height:"100%",borderRadius:6,transition:"width .5s cubic-bezier(.22,.61,.36,1)"}})))}
 
 function RingProgress(p){var size=p.size||120,stroke=p.stroke||8,r=(size-stroke)/2,circ=2*Math.PI*r;
-var pct=Math.min(p.value/p.max,1.15),off=circ*(1-Math.min(pct,1));
-var col=pct<=0.85?"var(--teal)":pct<=1?"var(--amber)":"var(--red)";
+var raw=p.max>0?p.value/p.max:0,pct=Math.max(0,raw),basePct=Math.min(pct,1),extraPct=Math.min(Math.max(pct-1,0),1);
+var baseOff=circ*(1-basePct),extraOff=circ*(1-extraPct);
+var baseCol=basePct<=0.85?"var(--teal)":"var(--amber)";
 return h("svg",{width:size,height:size,style:{transform:"rotate(-90deg)",display:"block"}},
 h("circle",{cx:size/2,cy:size/2,r:r,fill:"none",stroke:"var(--border-light)",strokeWidth:stroke}),
-h("circle",{cx:size/2,cy:size/2,r:r,fill:"none",stroke:col,strokeWidth:stroke,strokeLinecap:"round",strokeDasharray:circ,strokeDashoffset:off,style:{transition:"stroke-dashoffset .8s cubic-bezier(.22,.61,.36,1),stroke .3s"}}))}
+h("circle",{cx:size/2,cy:size/2,r:r,fill:"none",stroke:baseCol,strokeWidth:stroke,strokeLinecap:"round",strokeDasharray:circ,strokeDashoffset:baseOff,style:{transition:"stroke-dashoffset .8s cubic-bezier(.22,.61,.36,1),stroke .3s"}}),
+extraPct>0&&h("circle",{cx:size/2,cy:size/2,r:r,fill:"none",stroke:"var(--red)",strokeWidth:stroke,strokeLinecap:"round",strokeDasharray:circ,strokeDashoffset:extraOff,style:{transition:"stroke-dashoffset .8s cubic-bezier(.22,.61,.36,1),stroke .3s"}}))}
 
 function ImageUploadRow(p){var s=useState([]),pvs=s[0],setPvs=s[1],ref=useRef();
 var handleFiles=function(e){var files=e.target.files;if(!files||!files.length)return;var arr=[],loaded=0;
