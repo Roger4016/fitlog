@@ -64,6 +64,74 @@ function parseJSON(t){t=String(t).trim();var fb=t.match(/```(?:json)?\s*([\s\S]*
     }
     return null;
   }
+  function extractJSONArray(s, key){
+    var k1='"'+key+'"',k2="'"+key+"'";
+    var keyIdx=s.indexOf(k1);
+    if(keyIdx<0)keyIdx=s.indexOf(k2);
+    if(keyIdx<0)return null;
+    var arrStart=s.indexOf("[", keyIdx);
+    if(arrStart<0)return null;
+    var depth=0,inStr=false,esc=false;
+    for(var i=arrStart;i<s.length;i++){
+      var ch=s[i];
+      if(inStr){
+        if(esc){esc=false;continue}
+        if(ch==="\\"){esc=true;continue}
+        if(ch==="\""){inStr=false;continue}
+      }else{
+        if(ch==="\""){inStr=true;continue}
+        if(ch==="["){depth++;continue}
+        if(ch==="]"){depth--;if(depth===0)return s.slice(arrStart,i+1)}
+      }
+    }
+    return null;
+  }
+  function extractObjectsInArray(arrStr){
+    if(!arrStr)return [];
+    var res=[];
+    var inStr=false,esc=false,depth=0,start=-1;
+    for(var i=0;i<arrStr.length;i++){
+      var ch=arrStr[i];
+      if(inStr){
+        if(esc){esc=false;continue}
+        if(ch==="\\"){esc=true;continue}
+        if(ch==="\""){inStr=false;continue}
+        continue;
+      }
+      if(ch==="\""){inStr=true;continue}
+      if(ch==="{"){
+        if(depth===0)start=i;
+        depth++;
+      }else if(ch==="}"){
+        depth--;
+        if(depth===0&&start>=0){
+          res.push(arrStr.slice(start,i+1));
+          start=-1;
+        }
+      }
+    }
+    return res;
+  }
+  function extractBreakdownFromText(s){
+    var arr=extractJSONArray(s, "breakdown");
+    if(!arr)return null;
+    var objs=extractObjectsInArray(arr);
+    if(!objs.length)return null;
+    var items=[];
+    for(var i=0;i<objs.length;i++){
+      var o=objs[i];
+      var nm=o.match(/"name"\s*[:：]\s*"((?:[^"\\]|\\.)*)"/i);
+      var gramsM=o.match(/"grams"\s*[:：]\s*"?([\d.]+)/i);
+      var calM=o.match(/"calories"\s*[:：]\s*"?([\d.]+)/i);
+      var name=nm?nm[1].replace(/\\"/g,'"').replace(/\\n/g,"\n").replace(/\\\\/g,"\\"):"";
+      var grams=gramsM?+gramsM[1]:0;
+      var calories=calM?+calM[1]:0;
+      if((name&&String(name).trim())||grams||calories){
+        items.push({name:String(name).trim(),grams:grams,calories:calories});
+      }
+    }
+    return items.length?items:null;
+  }
   try{return JSON.parse(t)}catch(e){}
   var objStr=extractJSONObject(t);
   if(objStr)try{return JSON.parse(objStr)}catch(e2){}
@@ -80,6 +148,8 @@ function parseJSON(t){t=String(t).trim();var fb=t.match(/```(?:json)?\s*([\s\S]*
     });
     var rx=t.match(/"reasoning"\s*:\s*"((?:[^"\\]|\\.)*)"/);
     if(rx)obj.reasoning=rx[1].replace(/\\n/g,"\n").replace(/\\"/g,'"').replace(/\\\\/g,"\\");
+    var bd=extractBreakdownFromText(t);
+    if(bd&&bd.length)obj.breakdown=bd;
     return obj
   }
   throw new Error("無法解析: "+t.slice(0,120))
