@@ -1,4 +1,4 @@
-var CACHE = 'fitlog-v3';
+var CACHE = 'fitlog-v4';
 var URLS = ['./', './index.html'];
 
 self.addEventListener('install', function(e) {
