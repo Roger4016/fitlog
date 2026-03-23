@@ -252,7 +252,7 @@ h("button",{onClick:function(){if(!it)sd(addDays(d,1))},disabled:it,style:A({},S
 function MacroBar(p){var pct=Math.min((p.val/p.goal)*100,100),ov=p.val>p.goal;
 return h("div",{style:{marginBottom:10}},h("div",{style:{display:"flex",justifyContent:"space-between",marginBottom:4,alignItems:"baseline"}},
 h("span",{style:{fontSize:12,fontWeight:600,color:"var(--text-sec)",letterSpacing:"0.03em"}},p.label),
-h("span",{style:{fontSize:12,fontWeight:700,color:ov?"var(--red)":"var(--text)",fontVariantNumeric:"tabular-nums"}},p.val," / ",p.goal,"g")),
+h("span",{style:{fontSize:12,fontWeight:700,color:ov?"var(--red)":"var(--text)",fontVariantNumeric:"tabular-nums"}},Math.round(p.val)," / ",p.goal,"g")),
 h("div",{style:{background:"var(--border-light)",borderRadius:6,height:6,overflow:"hidden"}},
 h("div",{style:{width:pct+"%",background:ov?"var(--red)":p.color,height:"100%",borderRadius:6,transition:"width .5s cubic-bezier(.22,.61,.36,1)"}})))}
 
