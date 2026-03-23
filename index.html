@@ -266,12 +266,8 @@ h("div",{style:{display:"flex",justifyContent:"space-between",marginBottom:12,al
       h("summary",{style:{fontSize:12,color:"var(--amber)",fontWeight:600,cursor:"pointer"}},"⚠ AI 未回傳細項分析（點擊查看原始回應）"),
       h("pre",{style:{fontSize:10,color:"var(--text-sec)",marginTop:8,whiteSpace:"pre-wrap",wordBreak:"break-all",maxHeight:200,overflowY:"auto",background:"var(--bg)",borderRadius:6,padding:10,border:"1px solid var(--border)"}},rawText)):null;
   }
-  var totalBdCal=bd.reduce(function(s,it){return s+Math.round(+it.calories||0)},0);
-  var macroCal=calcCal(result.protein,result.fat,result.carbs);
   return h("div",{style:{marginBottom:12}},
-    h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}},
-      h("span",{style:{fontSize:11,color:"var(--text-sec)",fontWeight:700,letterSpacing:"0.04em"}},"熱量怎麼估的"),
-      h("span",{style:{fontSize:10,color:totalBdCal===macroCal?"var(--teal)":"var(--amber)",fontWeight:600}},"細項合計 "+totalBdCal+" / 總計 "+macroCal+" kcal")),
+    h("div",{style:{fontSize:11,color:"var(--text-sec)",fontWeight:700,marginBottom:8,letterSpacing:"0.04em"}},"熱量怎麼估的"),
     bd.map(function(it,i){
       return h("div",{key:i,style:{fontSize:12,color:"var(--text-sec)",lineHeight:1.55,padding:"8px 12px",background:"var(--card)",borderRadius:"var(--radius-xs)",border:"1px solid var(--plum-border)",marginBottom:i<bd.length-1?6:0}},
         "估計",
