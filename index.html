@@ -46,7 +46,44 @@ var FOOD_SCHEMA={type:"object",properties:{protein:{type:"number",description:"�
 var EXERCISE_SCHEMA={type:"object",properties:{calories:{type:"number",description:"主動消耗熱量（kcal）"},duration:{type:"number",description:"運動時長（分鐘）"},reasoning:{type:"string",description:"一句繁體中文，說明如何從描述或截圖得出數字"}},required:["calories","duration","reasoning"]};
 function foodConfidenceBadge(cf){var s=cf==null?"":String(cf).trim();if(s==="高")return{text:"高",bg:"var(--teal)"};if(s==="中")return{text:"中",bg:"var(--amber)"};if(s==="低")return{text:"低",bg:"var(--red)"};return{text:"—",bg:"var(--text-ter)"}}
 async function callAI(parts,schema){var key=getApiKey();if(!key)throw new Error("請先在設定中輸入 Gemini API Key");for(var attempt=0;attempt<2;attempt++){try{var gc={temperature:0.1,maxOutputTokens:1600,responseMimeType:"application/json"};if(schema)gc.responseJsonSchema=schema;var res=await fetch(GEMINI_URL,{method:"POST",headers:{"Content-Type":"application/json","x-goog-api-key":key},body:JSON.stringify({contents:[{parts:parts}],generationConfig:gc})});var data=await res.json();if(data.error)throw new Error(formatGeminiApiError(data.error.message));if(data.promptFeedback&&data.promptFeedback.blockReason)throw new Error("請求被安全政策攔截，請換描述或改用手動輸入");var c=data.candidates&&data.candidates[0];if(!c)throw new Error("無有效回應，請重試或改用手動");if(c.finishReason&&c.finishReason!=="STOP"&&c.finishReason!=="MAX_TOKENS")throw new Error("回應中斷 ("+c.finishReason+")，請換描述試試");var txt="";if(c.content&&c.content.parts){for(var i=0;i<c.content.parts.length;i++){if(c.content.parts[i].text)txt+=c.content.parts[i].text}}if(!txt)throw new Error("模型未回傳文字（可能被過濾）");return txt}catch(e){if(attempt===1)throw e;await new Promise(function(r){setTimeout(r,500)})}}}
-function parseJSON(t){t=String(t).trim();var fb=t.match(/```(?:json)?\s*([\s\S]*?)```/i);if(fb)t=fb[1].trim();try{return JSON.parse(t)}catch(e){}var m=t.match(/\{[\s\S]*\}/);if(m)try{return JSON.parse(m[0])}catch(e2){}var m2=t.match(/\{[^{}]*\}/);if(m2)try{return JSON.parse(m2[0])}catch(e3){}var nums=t.match(/"(?:protein|fat|carbs|calories|duration|confidence)"\s*[:：]\s*"?([\d.]+|[^",}]*)"?/g);if(nums&&nums.length>=2){var obj={};nums.forEach(function(s){var kv=s.match(/"(\w+)"\s*[:：]\s*"?([^",}]*)"?/);if(kv)obj[kv[1]]=isNaN(+kv[2])?kv[2]:+kv[2]});var rx=t.match(/"reasoning"\s*:\s*"((?:[^"\\]|\\.)*)"/);if(rx)obj.reasoning=rx[1].replace(/\\n/g,"\n").replace(/\\"/g,'"').replace(/\\\\/g,"\\");return obj}throw new Error("無法解析: "+t.slice(0,120))}
+function parseJSON(t){t=String(t).trim();var fb=t.match(/```(?:json)?\s*([\s\S]*?)```/i);if(fb)t=fb[1].trim();
+  function extractJSONObject(s){
+    var start=s.indexOf("{");if(start<0)return null;
+    var depth=0,inStr=false,esc=false;
+    for(var i=start;i<s.length;i++){
+      var ch=s[i];
+      if(inStr){
+        if(esc){esc=false;continue}
+        if(ch==="\\"){esc=true;continue}
+        if(ch==="\""){inStr=false;continue}
+      }else{
+        if(ch==="\""){inStr=true;continue}
+        if(ch==="{"){depth++;continue}
+        if(ch==="}"){depth--;if(depth===0)return s.slice(start,i+1)}
+      }
+    }
+    return null;
+  }
+  try{return JSON.parse(t)}catch(e){}
+  var objStr=extractJSONObject(t);
+  if(objStr)try{return JSON.parse(objStr)}catch(e2){}
+  var m=t.match(/\{[\s\S]*\}/);
+  if(m)try{return JSON.parse(m[0])}catch(e3){}
+  var m2=t.match(/\{[^{}]*\}/);
+  if(m2)try{return JSON.parse(m2[0])}catch(e4){}
+  var nums=t.match(/"(?:protein|fat|carbs|calories|duration|confidence)"\s*[:：]\s*"?([\d.]+|[^",}]*)"?/g);
+  if(nums&&nums.length>=2){
+    var obj={};
+    nums.forEach(function(s){
+      var kv=s.match(/"(\w+)"\s*[:：]\s*"?([^",}]*)"?/);
+      if(kv)obj[kv[1]]=isNaN(+kv[2])?kv[2]:+kv[2]
+    });
+    var rx=t.match(/"reasoning"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+    if(rx)obj.reasoning=rx[1].replace(/\\n/g,"\n").replace(/\\"/g,'"').replace(/\\\\/g,"\\");
+    return obj
+  }
+  throw new Error("無法解析: "+t.slice(0,120))
+}
 function checkAI(){return !!getApiKey()}
 
 var S={
