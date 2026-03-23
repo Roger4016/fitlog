@@ -36,7 +36,10 @@ var todayStr=function(){return fmtDate(new Date())};
 var addDays=function(d,n){var r=new Date(d+"T12:00:00");r.setDate(r.getDate()+n);return fmtDate(r)};
 var weekday=function(d){return["日","一","二","三","四","五","六"][new Date(d+"T12:00:00").getDay()]};
 var DEFAULT_GOALS={protein:115,fat:60,carbs:200,calories:1800};
-var GEMINI_URL="https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent";
+var GEMINI_URL_PRIMARY="https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent";
+var GEMINI_URL_FALLBACK="https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
+var _geminiFallbackUntil=0;
+var _geminiActiveModel="gemini-3-flash-preview";
 function normalizeApiKey(s){if(!s)return"";return String(s).replace(/[\uFEFF\u200B-\u200D\u2060]/g,"").replace(/\s/g,"").trim()}
 function getApiKey(){return normalizeApiKey(localStorage.getItem("fl_gemini_key"))}
 function setApiKey(k){localStorage.setItem("fl_gemini_key",normalizeApiKey(k))}
@@ -45,7 +48,45 @@ var FOOD_ITEM_SCHEMA={type:"object",properties:{name:{type:"string",description:
 var FOOD_SCHEMA={type:"object",properties:{protein:{type:"number",description:"蛋白質（克）"},fat:{type:"number",description:"脂肪（克）"},carbs:{type:"number",description:"碳水化合物（克）"},confidence:{type:"string",enum:["高","中","低"],description:"對此估算的信心等級"},reasoning:{type:"string",description:"一句補充說明（可選，與 breakdown 不重複則可簡短）"},breakdown:{type:"array",description:"將整份餐點拆成主要組成，逐項估計克數與該項熱量，用於解釋總營養如何加總",items:FOOD_ITEM_SCHEMA,minItems:1}},required:["protein","fat","carbs","confidence","reasoning","breakdown"]};
 var EXERCISE_SCHEMA={type:"object",properties:{calories:{type:"number",description:"主動消耗熱量（kcal）"},duration:{type:"number",description:"運動時長（分鐘）"},reasoning:{type:"string",description:"一句繁體中文，說明如何從描述或截圖得出數字"}},required:["calories","duration","reasoning"]};
 function foodConfidenceBadge(cf){var s=cf==null?"":String(cf).trim();if(s==="高")return{text:"高",bg:"var(--teal)"};if(s==="中")return{text:"中",bg:"var(--amber)"};if(s==="低")return{text:"低",bg:"var(--red)"};return{text:"—",bg:"var(--text-ter)"}}
-async function callAI(parts,schema){var key=getApiKey();if(!key)throw new Error("請先在設定中輸入 Gemini API Key");for(var attempt=0;attempt<2;attempt++){try{var gc={temperature:0.1,maxOutputTokens:4096,responseMimeType:"application/json"};if(schema)gc.responseJsonSchema=schema;var res=await fetch(GEMINI_URL,{method:"POST",headers:{"Content-Type":"application/json","x-goog-api-key":key},body:JSON.stringify({contents:[{parts:parts}],generationConfig:gc})});var data=await res.json();if(data.error)throw new Error(formatGeminiApiError(data.error.message));if(data.promptFeedback&&data.promptFeedback.blockReason)throw new Error("請求被安全政策攔截，請換描述或改用手動輸入");var c=data.candidates&&data.candidates[0];if(!c)throw new Error("無有效回應，請重試或改用手動");if(c.finishReason&&c.finishReason!=="STOP"&&c.finishReason!=="MAX_TOKENS")throw new Error("回應中斷 ("+c.finishReason+")，請換描述試試");var txt="";if(c.content&&c.content.parts){for(var i=0;i<c.content.parts.length;i++){if(c.content.parts[i].text)txt+=c.content.parts[i].text}}if(!txt)throw new Error("模型未回傳文字（可能被過濾）");return txt}catch(e){if(attempt===1)throw e;await new Promise(function(r){setTimeout(r,500)})}}}
+async function callAI(parts,schema){
+  var key=getApiKey();
+  if(!key)throw new Error("請先在設定中輸入 Gemini API Key");
+  var isQuotaErr=function(msg){
+    var s=String(msg||"");
+    return /resource_exhausted|rate\s*limit|quota|429|too\s*many\s*requests/i.test(s);
+  };
+  var useFallback=Date.now()<_geminiFallbackUntil;
+  for(var attempt=0;attempt<2;attempt++){
+    var url=useFallback?GEMINI_URL_FALLBACK:GEMINI_URL_PRIMARY;
+    try{
+      _geminiActiveModel=useFallback?"gemini-2.5-flash":"gemini-3-flash-preview";
+      var gc={temperature:0.1,maxOutputTokens:4096,responseMimeType:"application/json"};
+      if(schema)gc.responseJsonSchema=schema;
+      var res=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json","x-goog-api-key":key},body:JSON.stringify({contents:[{parts:parts}],generationConfig:gc})});
+      var data=await res.json();
+      if(data.error)throw new Error(formatGeminiApiError(data.error.message));
+      if(data.promptFeedback&&data.promptFeedback.blockReason)throw new Error("請求被安全政策攔截，請換描述或改用手動輸入");
+      var c=data.candidates&&data.candidates[0];
+      if(!c)throw new Error("無有效回應，請重試或改用手動");
+      if(c.finishReason&&c.finishReason!=="STOP"&&c.finishReason!=="MAX_TOKENS")throw new Error("回應中斷 ("+c.finishReason+")，請換描述試試");
+      var txt="";
+      if(c.content&&c.content.parts){for(var i=0;i<c.content.parts.length;i++){if(c.content.parts[i].text)txt+=c.content.parts[i].text}}
+      if(!txt)throw new Error("模型未回傳文字（可能被過濾）");
+      if(!useFallback){_geminiFallbackUntil=0;_geminiActiveModel="gemini-3-flash-preview";}
+      return txt;
+    }catch(e){
+      var quotaHit=isQuotaErr(e&&e.message);
+      if(quotaHit&&useFallback)throw e;
+      if(quotaHit&&!useFallback&&attempt===0){
+        _geminiFallbackUntil=Date.now()+60000;
+        useFallback=true;
+        continue;
+      }
+      if(attempt===1)throw e;
+      await new Promise(function(r){setTimeout(r,500)});
+    }
+  }
+}
 function parseJSON(t){t=String(t).trim();var fb=t.match(/```(?:json)?\s*([\s\S]*?)```/i);if(fb)t=fb[1].trim();
   function extractJSONObject(s){
     var start=s.indexOf("{");if(start<0)return null;
@@ -244,6 +285,7 @@ var doAdd=function(){var pr=+(manual?form.protein:result&&result.protein)||0,fa=
 if(!pr&&!fa&&!ca)return;p.onAdd(date,{id:uid(),desc:desc||"食物",protein:pr,fat:fa,carbs:ca,time:new Date().toLocaleTimeString("zh-TW",{hour:"2-digit",minute:"2-digit"})})};
 var has=result||(manual&&(+form.protein||+form.fat||+form.carbs));
 var sf=function(k,v){var u={};u[k]=v;setForm(function(f){return A({},f,u)})};
+var modelNote=_geminiActiveModel!=="gemini-3-flash-preview"?"目前使用 Gemini 2.5 Flash（主模型限額暫時降級）":"";
 return h("div",{className:"fade-in",style:S.overlay,onClick:p.onClose},
 h("div",{className:"slide-up",style:S.sheet,onClick:function(e){e.stopPropagation()}},
 h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}},h("div",{style:{fontSize:18,fontWeight:700,fontFamily:"var(--font-display)"}},"新增飲食"),h("button",{onClick:p.onClose,style:A({},S.btn("var(--card-alt)","var(--text-sec)"),{minHeight:32,minWidth:32,padding:0,borderRadius:8,fontSize:15})},"✕")),
@@ -284,6 +326,7 @@ h("div",{style:{display:"flex",justifyContent:"space-between",marginBottom:12,al
 })(),
 (function(){var rs=String(result.reasoning!=null?result.reasoning:"").trim();return rs?h("div",{style:{fontSize:12,color:"var(--text-sec)",lineHeight:1.55,marginBottom:12,padding:"10px 12px",background:"var(--card-alt)",borderRadius:"var(--radius-xs)",border:"1px solid var(--border-light)"}},rs):null})(),
 h("div",{style:{display:"flex",gap:6}},[["蛋白質",result.protein,"g","var(--blue)"],["脂肪",result.fat,"g","var(--amber)"],["碳水",result.carbs,"g","var(--plum)"],["熱量",calcCal(result.protein,result.fat,result.carbs),"kcal","var(--teal)"]].map(function(x){return h("div",{key:x[0],style:{flex:1,textAlign:"center",background:"var(--card)",borderRadius:"var(--radius-xs)",padding:"10px 2px",boxShadow:"var(--shadow-sm)"}},h("div",{style:{fontSize:20,fontWeight:800,color:x[3],fontVariantNumeric:"tabular-nums"}},x[1]),h("div",{style:{fontSize:10,color:"var(--text-ter)",marginTop:2}},x[0]+" "+x[2]))}))),
+h("div",{style:{fontSize:10,color:"var(--text-ter)",textAlign:"right",marginTop:8,opacity:.8,display:modelNote?"block":"none"}},modelNote),
 h("button",{onClick:doAdd,disabled:!has,style:A({},S.btn(!has?"var(--border-light)":"var(--accent)"),{width:"100%",minHeight:52,borderRadius:"var(--radius)",fontSize:16,fontWeight:700,opacity:!has?.5:1,boxShadow:has?"0 4px 16px rgba(196,93,44,0.25)":"none"})},"✓ 確認新增")))
 }
 
@@ -297,6 +340,7 @@ var doAdd=function(){var cal=+(manual?form.calories:result&&result.calories)||0,
 if(!cal&&!dur)return;p.onAdd(date,{id:uid(),desc:desc||"運動",calories:cal,duration:dur,time:new Date().toLocaleTimeString("zh-TW",{hour:"2-digit",minute:"2-digit"})})};
 var has=result||(manual&&(+form.calories||+form.duration));
 var sf=function(k,v){var u={};u[k]=v;setForm(function(f){return A({},f,u)})};
+var modelNote=_geminiActiveModel!=="gemini-3-flash-preview"?"目前使用 Gemini 2.5 Flash（主模型限額暫時降級）":"";
 return h("div",{className:"fade-in",style:S.overlay,onClick:p.onClose},
 h("div",{className:"slide-up",style:S.sheet,onClick:function(e){e.stopPropagation()}},
 h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}},h("div",{style:{fontSize:18,fontWeight:700,fontFamily:"var(--font-display)"}},"新增運動"),h("button",{onClick:p.onClose,style:A({},S.btn("var(--card-alt)","var(--text-sec)"),{minHeight:32,minWidth:32,padding:0,borderRadius:8,fontSize:15})},"✕")),
@@ -315,6 +359,7 @@ h("span",{style:{fontSize:14,fontWeight:700,display:"block",marginBottom:12}},"�
 h("div",{style:{display:"flex",gap:10}},
 h("div",{style:{flex:1,textAlign:"center",background:"var(--card)",borderRadius:"var(--radius-xs)",padding:"12px 0",boxShadow:"var(--shadow-sm)"}},h("div",{style:{fontSize:26,fontWeight:800,color:"var(--teal)",fontVariantNumeric:"tabular-nums"}},result.calories),h("div",{style:{fontSize:10,color:"var(--text-ter)",marginTop:2}},"Active Cal")),
 h("div",{style:{flex:1,textAlign:"center",background:"var(--card)",borderRadius:"var(--radius-xs)",padding:"12px 0",boxShadow:"var(--shadow-sm)"}},h("div",{style:{fontSize:26,fontWeight:800,color:"var(--blue)",fontVariantNumeric:"tabular-nums"}},result.duration),h("div",{style:{fontSize:10,color:"var(--text-ter)",marginTop:2}},"分鐘")))),
+h("div",{style:{fontSize:10,color:"var(--text-ter)",textAlign:"right",marginTop:8,opacity:.8,display:modelNote?"block":"none"}},modelNote),
 h("button",{onClick:doAdd,disabled:!has,style:A({},S.btn(!has?"var(--border-light)":"var(--teal)"),{width:"100%",minHeight:52,borderRadius:"var(--radius)",fontSize:16,fontWeight:700,opacity:!has?.5:1,boxShadow:has?"0 4px 16px rgba(42,125,110,0.25)":"none"})},"✓ 確認新增")))
 }
 
