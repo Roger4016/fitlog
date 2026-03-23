@@ -45,7 +45,7 @@ var FOOD_ITEM_SCHEMA={type:"object",properties:{name:{type:"string",description:
 var FOOD_SCHEMA={type:"object",properties:{protein:{type:"number",description:"蛋白質（克）"},fat:{type:"number",description:"脂肪（克）"},carbs:{type:"number",description:"碳水化合物（克）"},confidence:{type:"string",enum:["高","中","低"],description:"對此估算的信心等級"},reasoning:{type:"string",description:"一句補充說明（可選，與 breakdown 不重複則可簡短）"},breakdown:{type:"array",description:"將整份餐點拆成主要組成，逐項估計克數與該項熱量，用於解釋總營養如何加總",items:FOOD_ITEM_SCHEMA,minItems:1}},required:["protein","fat","carbs","confidence","reasoning","breakdown"]};
 var EXERCISE_SCHEMA={type:"object",properties:{calories:{type:"number",description:"主動消耗熱量（kcal）"},duration:{type:"number",description:"運動時長（分鐘）"},reasoning:{type:"string",description:"一句繁體中文，說明如何從描述或截圖得出數字"}},required:["calories","duration","reasoning"]};
 function foodConfidenceBadge(cf){var s=cf==null?"":String(cf).trim();if(s==="高")return{text:"高",bg:"var(--teal)"};if(s==="中")return{text:"中",bg:"var(--amber)"};if(s==="低")return{text:"低",bg:"var(--red)"};return{text:"—",bg:"var(--text-ter)"}}
-async function callAI(parts,schema){var key=getApiKey();if(!key)throw new Error("請先在設定中輸入 Gemini API Key");for(var attempt=0;attempt<2;attempt++){try{var gc={temperature:0.1,maxOutputTokens:1600,responseMimeType:"application/json"};if(schema)gc.responseJsonSchema=schema;var res=await fetch(GEMINI_URL,{method:"POST",headers:{"Content-Type":"application/json","x-goog-api-key":key},body:JSON.stringify({contents:[{parts:parts}],generationConfig:gc})});var data=await res.json();if(data.error)throw new Error(formatGeminiApiError(data.error.message));if(data.promptFeedback&&data.promptFeedback.blockReason)throw new Error("請求被安全政策攔截，請換描述或改用手動輸入");var c=data.candidates&&data.candidates[0];if(!c)throw new Error("無有效回應，請重試或改用手動");if(c.finishReason&&c.finishReason!=="STOP"&&c.finishReason!=="MAX_TOKENS")throw new Error("回應中斷 ("+c.finishReason+")，請換描述試試");var txt="";if(c.content&&c.content.parts){for(var i=0;i<c.content.parts.length;i++){if(c.content.parts[i].text)txt+=c.content.parts[i].text}}if(!txt)throw new Error("模型未回傳文字（可能被過濾）");return txt}catch(e){if(attempt===1)throw e;await new Promise(function(r){setTimeout(r,500)})}}}
+async function callAI(parts,schema){var key=getApiKey();if(!key)throw new Error("請先在設定中輸入 Gemini API Key");for(var attempt=0;attempt<2;attempt++){try{var gc={temperature:0.1,maxOutputTokens:4096,responseMimeType:"application/json"};if(schema)gc.responseJsonSchema=schema;var res=await fetch(GEMINI_URL,{method:"POST",headers:{"Content-Type":"application/json","x-goog-api-key":key},body:JSON.stringify({contents:[{parts:parts}],generationConfig:gc})});var data=await res.json();if(data.error)throw new Error(formatGeminiApiError(data.error.message));if(data.promptFeedback&&data.promptFeedback.blockReason)throw new Error("請求被安全政策攔截，請換描述或改用手動輸入");var c=data.candidates&&data.candidates[0];if(!c)throw new Error("無有效回應，請重試或改用手動");if(c.finishReason&&c.finishReason!=="STOP"&&c.finishReason!=="MAX_TOKENS")throw new Error("回應中斷 ("+c.finishReason+")，請換描述試試");var txt="";if(c.content&&c.content.parts){for(var i=0;i<c.content.parts.length;i++){if(c.content.parts[i].text)txt+=c.content.parts[i].text}}if(!txt)throw new Error("模型未回傳文字（可能被過濾）");return txt}catch(e){if(attempt===1)throw e;await new Promise(function(r){setTimeout(r,500)})}}}
 function parseJSON(t){t=String(t).trim();var fb=t.match(/```(?:json)?\s*([\s\S]*?)```/i);if(fb)t=fb[1].trim();
   function extractJSONObject(s){
     var start=s.indexOf("{");if(start<0)return null;
@@ -68,6 +68,11 @@ function parseJSON(t){t=String(t).trim();var fb=t.match(/```(?:json)?\s*([\s\S]*
     var k1='"'+key+'"',k2="'"+key+"'";
     var keyIdx=s.indexOf(k1);
     if(keyIdx<0)keyIdx=s.indexOf(k2);
+    if(keyIdx<0){
+      var re=new RegExp('["\']?'+key+'["\']?\\s*[:：]','i');
+      var m=re.exec(s);
+      if(m)keyIdx=m.index+m[0].length-1;
+    }
     if(keyIdx<0)return null;
     var arrStart=s.indexOf("[", keyIdx);
     if(arrStart<0)return null;
@@ -120,9 +125,9 @@ function parseJSON(t){t=String(t).trim();var fb=t.match(/```(?:json)?\s*([\s\S]*
     var items=[];
     for(var i=0;i<objs.length;i++){
       var o=objs[i];
-      var nm=o.match(/"name"\s*[:：]\s*"((?:[^"\\]|\\.)*)"/i);
-      var gramsM=o.match(/"grams"\s*[:：]\s*"?([\d.]+)/i);
-      var calM=o.match(/"calories"\s*[:：]\s*"?([\d.]+)/i);
+      var nm=o.match(/['"]name['"]\s*[:：]\s*['"]((?:[^'"]|\\.)*)['"]/i);
+      var gramsM=o.match(/['"]grams['"]\s*[:：]\s*['"]?([\d.]+)['"]?/i);
+      var calM=o.match(/['"]calories['"]\s*[:：]\s*['"]?([\d.]+)['"]?/i);
       var name=nm?nm[1].replace(/\\"/g,'"').replace(/\\n/g,"\n").replace(/\\\\/g,"\\"):"";
       var grams=gramsM?+gramsM[1]:0;
       var calories=calM?+calM[1]:0;
@@ -132,9 +137,36 @@ function parseJSON(t){t=String(t).trim();var fb=t.match(/```(?:json)?\s*([\s\S]*
     }
     return items.length?items:null;
   }
-  try{return JSON.parse(t)}catch(e){}
+  function normalizeKeys(obj){
+    if(!obj||typeof obj!=='object')return obj;
+    var keyMap={breakdown:1,confidence:1,reasoning:1,protein:1,fat:1,carbs:1};
+    var keys=Object.keys(obj);
+    for(var ki=0;ki<keys.length;ki++){
+      var lower=keys[ki].toLowerCase();
+      if(keyMap[lower]&&keys[ki]!==lower){
+        obj[lower]=obj[keys[ki]];
+      }
+    }
+    return obj;
+  }
+  function ensureBreakdown(obj,src){
+    if(!obj)return obj;
+    normalizeKeys(obj);
+    if(!obj.breakdown||!Array.isArray(obj.breakdown)||!obj.breakdown.length){
+      var bd=extractBreakdownFromText(src);
+      if(bd&&bd.length)obj.breakdown=bd;
+    }
+    return obj;
+  }
+  try{
+    var parsed=JSON.parse(t);
+    return ensureBreakdown(parsed,t);
+  }catch(e){}
   var objStr=extractJSONObject(t);
-  if(objStr)try{return JSON.parse(objStr)}catch(e2){}
+  if(objStr)try{
+    var parsed2=JSON.parse(objStr);
+    return ensureBreakdown(parsed2,objStr);
+  }catch(e2){}
   var m=t.match(/\{[\s\S]*\}/);
   if(m)try{return JSON.parse(m[0])}catch(e3){}
   var m2=t.match(/\{[^{}]*\}/);
@@ -206,7 +238,8 @@ var _d=useState(p.defaultDate),date=_d[0],setDate=_d[1],_s=useState(""),desc=_s[
 var _i=useState(null),imgs=_i[0],setImgs=_i[1],_r=useState(null),result=_r[0],setResult=_r[1];
 var _m=useState(false),manual=_m[0],setManual=_m[1],_f=useState({protein:"",fat:"",carbs:""}),form=_f[0],setForm=_f[1];
 var _l=useState(false),loading=_l[0],setLoading=_l[1],_e=useState(""),err=_e[0],setErr=_e[1];
-var doAI=async function(){setLoading(true);setErr("");setResult(null);try{if(!checkAI()){setErr("⚠️ 請先在設定中輸入 Gemini API Key");setLoading(false);return}var userText='你是營養師。根據食物描述或圖片估算每份的三大營養素。必須用 breakdown 陣列把餐點拆成主要部位（例如滷肉飯：白飯、滷肉與滷汁、配菜），每一項都要填 name（名稱）、grams（估計克數）、calories（該項估計大卡）。並使 breakdown 每項 calories 加總（四捨五入到整數）= 由 protein/fat/carbs 推算的整份熱量（大卡）。為避免四捨五入誤差：請先對前 n-1 項 calories 做四捨五入整數，最後一項 calories =（整份熱量 - 前面 n-1 項四捨五入後 calories 加總），確保精確相等（最後項不得為負）。讓使用者看得出「怎麼加總成上面的蛋白質／脂肪／碳水」。reasoning 可簡短一句補充假設。只回傳一個 JSON（不要 markdown）。\n\n食物：'+(desc||"（根據圖片判斷）")+(p.settings.defaultRules?"\n規則："+p.settings.defaultRules:"");var parts=[];if(imgs&&imgs.length>0){for(var ii=0;ii<imgs.length;ii++){var pt=imgs[ii].split(",");parts.push({inline_data:{mime_type:(pt[0].match(/:(.*?);/)||[])[1]||"image/jpeg",data:pt[1]}})}}parts.push({text:userText});var t=await callAI(parts,FOOD_SCHEMA);var j=parseJSON(t);setResult(j);setForm({protein:String(j.protein||""),fat:String(j.fat||""),carbs:String(j.carbs||"")});}catch(e){setErr("AI 分析失敗："+((e&&e.message)||"請重試或改用手動輸入"))}setLoading(false)};
+var _raw=useState(""),rawText=_raw[0],setRawText=_raw[1];
+var doAI=async function(){setLoading(true);setErr("");setResult(null);setRawText("");try{if(!checkAI()){setErr("⚠️ 請先在設定中輸入 Gemini API Key");setLoading(false);return}var userText='你是營養師。根據食物描述或圖片估算每份的三大營養素。\n\n【重要】你的 JSON 回應中，breakdown 陣列為必填欄位，絕對不可省略。\n\n必須用 breakdown 陣列把餐點拆成主要部位（例如滷肉飯→白飯、滷肉與滷汁、配菜），每一項都要填 name（名稱）、grams（估計克數）、calories（該項估計大卡）。並使 breakdown 每項 calories 加總（四捨五入到整數）= 由 protein/fat/carbs 推算的整份熱量（大卡）。為避免四捨五入誤差：請先對前 n-1 項 calories 做四捨五入整數，最後一項 calories =（整份熱量 - 前面 n-1 項四捨五入後 calories 加總），確保精確相等（最後項不得為負）。讓使用者看得出「怎麼加總成上面的蛋白質／脂肪／碳水」。reasoning 可簡短一句補充假設。只回傳一個 JSON（不要 markdown）。\n\n食物：'+(desc||"（根據圖片判斷）")+(p.settings.defaultRules?"\n規則："+p.settings.defaultRules:"");var parts=[];if(imgs&&imgs.length>0){for(var ii=0;ii<imgs.length;ii++){var pt=imgs[ii].split(",");parts.push({inline_data:{mime_type:(pt[0].match(/:(.*?);/)||[])[1]||"image/jpeg",data:pt[1]}})}}parts.push({text:userText});var t=await callAI(parts,FOOD_SCHEMA);setRawText(t);var j=parseJSON(t);setResult(j);setForm({protein:String(j.protein||""),fat:String(j.fat||""),carbs:String(j.carbs||"")});}catch(e){setErr("AI 分析失敗："+((e&&e.message)||"請重試或改用手動輸入"))}setLoading(false)};
 var doAdd=function(){var pr=+(manual?form.protein:result&&result.protein)||0,fa=+(manual?form.fat:result&&result.fat)||0,ca=+(manual?form.carbs:result&&result.carbs)||0;
 if(!pr&&!fa&&!ca)return;p.onAdd(date,{id:uid(),desc:desc||"食物",protein:pr,fat:fa,carbs:ca,time:new Date().toLocaleTimeString("zh-TW",{hour:"2-digit",minute:"2-digit"})})};
 var has=result||(manual&&(+form.protein||+form.fat||+form.carbs));
@@ -228,9 +261,17 @@ result&&!manual&&h("div",{className:"fade-up",style:{background:"var(--plum-ligh
 h("div",{style:{display:"flex",justifyContent:"space-between",marginBottom:12,alignItems:"center"}},h("span",{style:{fontSize:14,fontWeight:700}},"分析結果"),(function(){var b=foodConfidenceBadge(result.confidence);return h("span",{style:{background:b.bg,color:"#fff",borderRadius:20,padding:"3px 12px",fontSize:10,fontWeight:700}},"信心度 "+b.text)})()),
 (function(){
   var bd=result.breakdown;
-  if(!bd||!bd.length)return null;
+  if(!bd||!bd.length){
+    return rawText?h("details",{style:{marginBottom:12,background:"var(--card-alt)",borderRadius:"var(--radius-xs)",padding:"10px 12px",border:"1px solid var(--border-light)"}},
+      h("summary",{style:{fontSize:12,color:"var(--amber)",fontWeight:600,cursor:"pointer"}},"⚠ AI 未回傳細項分析（點擊查看原始回應）"),
+      h("pre",{style:{fontSize:10,color:"var(--text-sec)",marginTop:8,whiteSpace:"pre-wrap",wordBreak:"break-all",maxHeight:200,overflowY:"auto",background:"var(--bg)",borderRadius:6,padding:10,border:"1px solid var(--border)"}},rawText)):null;
+  }
+  var totalBdCal=bd.reduce(function(s,it){return s+Math.round(+it.calories||0)},0);
+  var macroCal=calcCal(result.protein,result.fat,result.carbs);
   return h("div",{style:{marginBottom:12}},
-    h("div",{style:{fontSize:11,color:"var(--text-sec)",fontWeight:700,marginBottom:8,letterSpacing:"0.04em"}},"熱量怎麼估的"),
+    h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}},
+      h("span",{style:{fontSize:11,color:"var(--text-sec)",fontWeight:700,letterSpacing:"0.04em"}},"熱量怎麼估的"),
+      h("span",{style:{fontSize:10,color:totalBdCal===macroCal?"var(--teal)":"var(--amber)",fontWeight:600}},"細項合計 "+totalBdCal+" / 總計 "+macroCal+" kcal")),
     bd.map(function(it,i){
       return h("div",{key:i,style:{fontSize:12,color:"var(--text-sec)",lineHeight:1.55,padding:"8px 12px",background:"var(--card)",borderRadius:"var(--radius-xs)",border:"1px solid var(--plum-border)",marginBottom:i<bd.length-1?6:0}},
         "估計",
