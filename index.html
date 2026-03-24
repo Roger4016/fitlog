@@ -634,6 +634,9 @@ var handleImport=function(imp){return runDayPersist(function(){var prev=A({},day
 var dayData=allDays[date]||{food:[],exercise:[]},food=dayData.food||[],exercise=dayData.exercise||[];
 var pr=food.reduce(function(s,f){return s+(f.protein||0)},0),ft=food.reduce(function(s,f){return s+(f.fat||0)},0),cb=food.reduce(function(s,f){return s+(f.carbs||0)},0);
 var intake=calcCal(pr,ft,cb),burned=exercise.reduce(function(s,e){return s+(e.calories||0)},0),net=intake-burned;
+var storageIsCritical=storageUsagePct>=95;
+var storageIsWarning=storageUsagePct>=80&&storageUsagePct<=94&&!storageBannerDismissed;
+var showStorageBanner=storageIsCritical||storageIsWarning;
 
 if(loading)return h("div",{style:{display:"flex",alignItems:"center",justifyContent:"center",height:"100%",background:"var(--bg)"}},
 h("div",{style:{textAlign:"center"}},h("div",{style:{width:48,height:48,borderRadius:12,background:"var(--accent)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 12px",fontSize:24,boxShadow:"0 4px 16px rgba(196,93,44,.25)"}},h("span",{className:"pulse",style:{color:"#fff",fontFamily:"var(--font-display)",fontWeight:900}},"F")),h("div",{style:{fontSize:18,fontWeight:900,color:"var(--text)",fontFamily:"var(--font-display)"}},"FitLog"),h("div",{style:{fontSize:13,color:"var(--text-ter)",marginTop:4}},"載入中…")));
@@ -647,12 +650,13 @@ h(DateNav,{date:date,setDate:setDate}))),
 h("div",{style:{flex:1,overflowY:"auto",WebkitOverflowScrolling:"touch",overscrollBehavior:"contain"}},
 h(UpdateBanner,{onExport:exportAppJSON}),
 h(InstallBanner),
-(function(){var pct=storageUsagePct,critical=pct>=95,warn=pct>=80&&pct<=94&&!storageBannerDismissed;if(pct<80||(!critical&&!warn))return null;var red=critical;return h("div",{key:"fl-storage-warn",style:{margin:"10px 16px 0",padding:"12px 14px",background:red?"var(--red-light)":"var(--amber-light)",border:red?"1px solid var(--red-border)":"1px solid var(--amber-border)",borderRadius:"var(--radius)"}},
+showStorageBanner&&h("div",{key:"fl-storage-warn",style:{margin:"10px 16px 0",padding:"12px 14px",background:storageIsCritical?"var(--red-light)":"var(--amber-light)",border:storageIsCritical?"1px solid var(--red-border)":"1px solid var(--amber-border)",borderRadius:"var(--radius)"}},
 h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10}},
-h("div",{style:{flex:1,minWidth:0}},h("div",{style:{fontSize:13,fontWeight:700,color:"var(--text)",lineHeight:1.45}},red?"⚠️ 儲存空間即將用盡（"+pct+"%），請立即匯出並清除舊資料":"⚠️ 儲存空間已使用 "+pct+"%，建議匯出備份")),
+h("div",{style:{flex:1,minWidth:0}},
+h("div",{style:{fontSize:13,fontWeight:700,color:"var(--text)",lineHeight:1.45}},storageIsCritical?"⚠️ 儲存空間即將用盡（"+storageUsagePct+"%），請立即匯出並清除舊資料":"⚠️ 儲存空間已使用 "+storageUsagePct+"%，建議匯出備份")),
 h("div",{style:{display:"flex",alignItems:"center",gap:8,flexShrink:0}},
 h("button",{onClick:exportAppJSON,style:A({},S.btn("var(--blue)"),{minHeight:36,padding:"0 12px",borderRadius:"var(--radius-xs)",fontSize:12})},"匯出 JSON"),
-!red&&h("button",{onClick:function(){setStorageBannerDismissed(true)},style:{background:"none",border:"none",fontSize:18,color:"var(--text-ter)",cursor:"pointer",padding:0,lineHeight:1}},"✕")))})(),
+!storageIsCritical&&h("button",{onClick:function(){setStorageBannerDismissed(true)},style:{background:"none",border:"none",fontSize:18,color:"var(--text-ter)",cursor:"pointer",padding:0,lineHeight:1}},"✕"))),
 h(ApiKeyBanner,{key:apiKeyEpoch,onOpenSettings:function(){setSheet("settings")}}),
 h("div",{style:{background:"var(--card)",padding:"0 20px 4px",position:"relative"}},
 h("button",{onClick:function(){setSheet("settings")},style:A({},S.btn("var(--card-alt)","var(--text-sec)","1px solid var(--border)"),{minHeight:32,padding:"0 12px",borderRadius:"var(--radius-xs)",fontSize:13,position:"absolute",top:8,right:12,zIndex:2})},"⚙"),
