@@ -33,8 +33,10 @@ var uid=function(){return Date.now().toString(36)+Math.random().toString(36).sli
 var calcCal=function(p,f,c){return Math.round((+p||0)*4+(+f||0)*9+(+c||0)*4)};
 var fmtDate=function(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")};
 var todayStr=function(){return fmtDate(new Date())};
+var dateLabel=function(d){if(d===todayStr())return"今天";var y=new Date();y.setDate(y.getDate()-1);if(d===fmtDate(y))return"昨天";return d.slice(5).replace("-","/")};
 var addDays=function(d,n){var r=new Date(d+"T12:00:00");r.setDate(r.getDate()+n);return fmtDate(r)};
 var weekday=function(d){return["日","一","二","三","四","五","六"][new Date(d+"T12:00:00").getDay()]};
+var exportBackupJSON=function(payload,showToastFn){var blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json;charset=utf-8"}),u=URL.createObjectURL(blob),a=document.createElement("a");a.href=u;a.download="fitlog_backup_"+todayStr()+".json";a.click();URL.revokeObjectURL(u);if(showToastFn)showToastFn("✅ JSON 已匯出（含每日目標與預設規則）")};
 var DEFAULT_GOALS={protein:115,fat:60,carbs:200,calories:1800};
 var GEMINI_URL_PRIMARY="https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent";
 var GEMINI_URL_FALLBACK="https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
@@ -427,7 +429,7 @@ var displayItems=getReorderedItems();var floatTop=startRect?dragY-startY.current
 return h("div",{className:"fade-in",style:S.overlay,onClick:function(){if(dragIdx===null)p.onClose()}},
 h("div",{className:"slide-up",style:S.sheet,onClick:function(e){e.stopPropagation()},onTouchMove:onTouchMove,onTouchEnd:onTouchEnd},
 h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}},h("div",{style:{fontSize:18,fontWeight:700,fontFamily:"var(--font-display)"}},"快速新增"),h("button",{onClick:p.onClose,style:A({},S.btn("var(--card-alt)","var(--text-sec)"),{minHeight:32,minWidth:32,padding:0,borderRadius:8,fontSize:15})},"✕")),
-h("div",{style:{fontSize:12,color:"var(--text-ter)",marginBottom:16}},"長按 ☰ 拖曳排序 · 點擊即新增至今天"),
+h("div",{style:{fontSize:12,color:"var(--text-ter)",marginBottom:16}},"長按 ☰ 拖曳排序 · 點擊即新增至"+dateLabel(p.date||todayStr())),
 items.length===0&&h("div",{style:{color:"var(--text-ter)",textAlign:"center",padding:"32px 0",fontSize:14}},"請先至「常用」頁籤新增常用食物"),
 displayItems.map(function(fav,pos){var origIdx=items.indexOf(fav);var isBeingDragged=dragIdx!==null&&fav===items[dragIdx];var showDropLine=dragIdx!==null&&overIdx!==null&&pos===overIdx&&overIdx!==dragIdx;
 return h("div",{key:fav.name+":"+origIdx},showDropLine&&dragIdx>overIdx&&h("div",{style:{height:3,background:"var(--accent)",borderRadius:2,marginBottom:6,marginLeft:36}}),
@@ -467,7 +469,7 @@ p.favorites.map(function(fav,i){var isDel=confirmDel===i;return h("div",{key:i,s
 h("div",{style:{flex:1,minWidth:0}},h("div",{style:{fontWeight:600,fontSize:14}},fav.name),h("div",{style:{fontSize:11,color:"var(--text-sec)",marginTop:3}},"P "+fav.protein+"g · F "+fav.fat+"g · C "+fav.carbs+"g · "+calcCal(fav.protein,fav.fat,fav.carbs)+" kcal")),
 isDel?h("div",{style:{display:"flex",gap:6,flexShrink:0}},h("button",{onClick:function(){p.onSave(p.favorites.filter(function(unused,j){return j!==i}));setConfirmDel(null)},style:A({},S.btn("var(--red)"),{minHeight:32,padding:"0 12px",borderRadius:8,fontSize:13})},"刪除"),h("button",{onClick:function(){setConfirmDel(null)},style:A({},S.btn("var(--card-alt)","var(--text-sec)","1px solid var(--border)"),{minHeight:32,padding:"0 12px",borderRadius:8,fontSize:13})},"取消"))
 :h("div",{style:{display:"flex",gap:6,flexShrink:0}},
-h("button",{onClick:function(){p.onAddToDay(fav)},style:A({},S.btn("var(--teal-light)","var(--teal)","1px solid var(--teal-border)"),{minHeight:32,padding:"0 10px",borderRadius:"var(--radius-xs)",fontSize:12})},"+今天"),
+h("button",{onClick:function(){p.onAddToDay(fav)},style:A({},S.btn("var(--teal-light)","var(--teal)","1px solid var(--teal-border)"),{minHeight:32,padding:"0 10px",borderRadius:"var(--radius-xs)",fontSize:12})},"+"+dateLabel(p.date||todayStr())),
 h("button",{onClick:function(){setEditIdx(i);setForm({name:fav.name,protein:String(fav.protein),fat:String(fav.fat),carbs:String(fav.carbs)});setAdding(false)},style:A({},S.btn("var(--card-alt)","var(--text-sec)","1px solid var(--border)"),{minHeight:32,padding:"0 10px",borderRadius:"var(--radius-xs)",fontSize:12})},"✎"),
 h("button",{onClick:function(){setConfirmDel(i)},style:A({},S.btn("var(--red-light)","var(--red)","1px solid var(--red-border)"),{minHeight:32,padding:"0 10px",borderRadius:"var(--radius-xs)",fontSize:13})},"×")))})))
 }
@@ -496,7 +498,7 @@ var sg=function(k,v){var u={};u[k]=v;setG(function(prev){return A({},prev,u)})};
 var exportCSV=function(){var rows=[["日期","類型","描述","時間","蛋白質g","脂肪g","碳水g","熱量kcal","消耗kcal","時長min"]];Object.keys(p.allDays).sort().forEach(function(d){var day=p.allDays[d];(day.food||[]).forEach(function(f){rows.push([d,"飲食",f.desc,f.time||"",f.protein,f.fat,f.carbs,calcCal(f.protein,f.fat,f.carbs),"",""])});(day.exercise||[]).forEach(function(e){rows.push([d,"運動",e.desc,e.time||"","","","","",e.calories,e.duration||""])})});var csv="\uFEFF"+rows.map(function(r){return r.map(function(c){return'"'+String(c).replace(/"/g,'""')+'"'}).join(",")}).join("\n");var b=new Blob([csv],{type:"text/csv;charset=utf-8"}),u=URL.createObjectURL(b),a=document.createElement("a");a.href=u;a.download="fitlog_"+todayStr()+".csv";a.click();URL.revokeObjectURL(u);p.showToast("✅ CSV 已匯出")};
 var parseCSVLine=function(line){var out=[],cur="",inQ=false;for(var i=0;i<line.length;i++){var ch=line[i];if(inQ){if(ch==="\""){if(line[i+1]==="\""){cur+="\"";i++;}else{inQ=false}}else{cur+=ch}}else{if(ch===","){out.push(cur);cur=""}else if(ch==="\""){inQ=true}else{cur+=ch}}}out.push(cur);return out};
 var importCSV=function(e){var file=e.target.files&&e.target.files[0];if(!file)return;var reader=new FileReader();reader.onload=function(ev){try{var lines=ev.target.result.split("\n").map(function(l){return l.trim()}).filter(Boolean);if(lines.length<2){p.showToast("CSV 為空");return}var imp={};for(var i=1;i<lines.length;i++){var cols=parseCSVLine(lines[i]);var dt=cols[0],tp=cols[1],ds=cols[2],tm=cols[3];if(!dt)continue;if(!imp[dt])imp[dt]={food:[],exercise:[]};if(tp==="飲食")imp[dt].food.push({id:uid(),desc:ds,time:tm,protein:+cols[4]||0,fat:+cols[5]||0,carbs:+cols[6]||0});else if(tp==="運動")imp[dt].exercise.push({id:uid(),desc:ds,time:tm,calories:+cols[8]||0,duration:+cols[9]||0})}p.onImport(imp);p.showToast("✅ 已匯入 "+Object.keys(imp).length+" 天")}catch(err){p.showToast("匯入失敗")}};reader.readAsText(file)};
-var exportJSON=function(){var payload={version:1,exportedAt:new Date().toISOString(),allDays:p.allDays,favorites:p.favorites,goals:p.goals,settings:{defaultRules:(p.settings&&p.settings.defaultRules)||""}};var blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json;charset=utf-8"}),u=URL.createObjectURL(blob),a=document.createElement("a");a.href=u;a.download="fitlog_backup_"+todayStr()+".json";a.click();URL.revokeObjectURL(u);p.showToast("✅ JSON 已匯出（含每日目標與預設規則）")};
+var exportJSON=function(){var payload={version:1,exportedAt:new Date().toISOString(),allDays:p.allDays,favorites:p.favorites,goals:p.goals,settings:{defaultRules:(p.settings&&p.settings.defaultRules)||""}};exportBackupJSON(payload,p.showToast)};
 var importJSON=function(e){var file=e.target.files&&e.target.files[0];if(!file)return;var reader=new FileReader();reader.onload=function(ev){try{var data=JSON.parse(ev.target.result);if(data.goals&&p.onSaveGoals)p.onSaveGoals(data.goals);var importedRules=(data.settings&&data.settings.defaultRules!=null)?String(data.settings.defaultRules):((data.defaultRules!=null)?String(data.defaultRules):null);if(importedRules!==null&&p.onSaveSettings)p.onSaveSettings(A({},p.settings,{defaultRules:importedRules}));if(data.favorites&&Array.isArray(data.favorites)&&p.onSaveFavorites)p.onSaveFavorites(data.favorites);var allDays=data.allDays||data.days;if(allDays&&typeof allDays==="object"){var imp={};Object.keys(allDays).forEach(function(dt){var day=allDays[dt]||{};imp[dt]={food:day.food||[],exercise:day.exercise||[]}});p.onImport(imp);p.showToast("✅ 已匯入備份 "+Object.keys(imp).length+" 天（含每日目標與預設規則）")}else{p.showToast("JSON 格式不正確：缺少 allDays")}}catch(err){p.showToast("JSON 解析失敗")}};reader.readAsText(file)};
 return h("div",{className:"fade-in",style:S.overlay,onClick:p.onClose},
 h("div",{className:"slide-up",style:A({},S.sheet,{maxHeight:"95vh",padding:0}),onClick:function(e){e.stopPropagation()}},
@@ -556,6 +558,29 @@ h("div",{style:{fontSize:12,color:"var(--text-sec)",lineHeight:1.5}},"點擊瀏�
 h("button",{onClick:dismiss,style:{background:"none",border:"none",fontSize:18,color:"var(--text-ter)",cursor:"pointer",padding:"0 0 0 8px",lineHeight:1}},"✕")))
 }
 
+function UpdateBanner(p){
+var _u=useState(null),updateType=_u[0],setUpdateType=_u[1];
+useEffect(function(){var onUpdate=function(e){if(e&&e.detail&&e.detail.updateType)setUpdateType(e.detail.updateType)};window.addEventListener("swUpdate",onUpdate);return function(){window.removeEventListener("swUpdate",onUpdate)}},[]);
+if(!updateType)return null;
+var applyUpdate=function(){var reg=window.__swReg;if(reg&&reg.waiting)reg.waiting.postMessage({type:"SKIP_WAITING"})};
+if(updateType==="data")return h("div",{style:{margin:"12px 16px 0",padding:"14px 16px",background:"var(--amber-light)",border:"1px solid var(--amber-border)",borderRadius:"var(--radius)"}},
+h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10}},
+h("div",{style:{flex:1}},
+h("div",{style:{fontWeight:700,fontSize:14,marginBottom:6,color:"var(--text)"}},"⚠️ 有新版本可更新（建議先備份）"),
+h("div",{style:{fontSize:12,color:"var(--text-sec)",lineHeight:1.5}},"此更新可能涉及資料格式調整，建議先匯出 JSON，再執行更新。"),
+h("div",{style:{display:"flex",gap:8,marginTop:10}},
+h("button",{onClick:p.onExport,style:A({},S.btn("var(--blue)"),{minHeight:36,padding:"0 12px",borderRadius:"var(--radius-xs)",fontSize:12})},"匯出 JSON"),
+h("button",{onClick:applyUpdate,style:A({},S.btn("var(--amber-light)","var(--amber)","1px solid var(--amber-border)"),{minHeight:36,padding:"0 12px",borderRadius:"var(--radius-xs)",fontSize:12})},"已備份，立即更新"))),
+h("button",{onClick:function(){setUpdateType(null)},style:{background:"none",border:"none",fontSize:18,color:"var(--text-ter)",cursor:"pointer",padding:"0 0 0 8px",lineHeight:1}},"✕")));
+return h("div",{style:{margin:"12px 16px 0",padding:"14px 16px",background:"var(--blue-light)",border:"1px solid var(--blue-border)",borderRadius:"var(--radius)"}},
+h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10}},
+h("div",{style:{flex:1}},
+h("div",{style:{fontWeight:700,fontSize:14,marginBottom:6,color:"var(--text)"}},"有新版本可更新"),
+h("div",{style:{fontSize:12,color:"var(--text-sec)",lineHeight:1.5}},"資料不受影響，可直接更新並重新載入。"),
+h("button",{onClick:applyUpdate,style:A({},S.btn("var(--blue)"),{minHeight:36,padding:"0 16px",borderRadius:"var(--radius-xs)",fontSize:13,marginTop:8})},"立即更新")),
+h("button",{onClick:function(){setUpdateType(null)},style:{background:"none",border:"none",fontSize:18,color:"var(--text-ter)",cursor:"pointer",padding:"0 0 0 8px",lineHeight:1}},"✕")))
+}
+
 function App(){
 var _ad=useState({}),allDays=_ad[0],setAllDays=_ad[1],daysRef=useRef({}),persistQ=useRef(Promise.resolve()),_dt=useState(todayStr()),date=_dt[0],setDate=_dt[1];
 var _tb=useState("records"),tab=_tb[0],setTab=_tb[1],_fv=useState([]),favorites=_fv[0],setFavorites=_fv[1];
@@ -565,6 +590,7 @@ var _sh=useState(null),sheet=_sh[0],setSheet=_sh[1],_cd=useState(null),confirmDe
 var _kb=useState(false),kbOpen=_kb[0],setKbOpen=_kb[1];
 var _ape=useState(0),apiKeyEpoch=_ape[0],bumpApiKeyEpoch=_ape[1];
 var showToast=function(m){setToast(m);setTimeout(function(){setToast(null)},2500)};
+var exportAppJSON=function(){exportBackupJSON({version:1,exportedAt:new Date().toISOString(),allDays:allDays,favorites:favorites,goals:goals,settings:{defaultRules:(settings&&settings.defaultRules)||""}},showToast)};
 
 useEffect(function(){var kbTimer=null;
 var onF=function(e){if(e.target.tagName==="INPUT"||e.target.tagName==="TEXTAREA"){if(kbTimer){clearTimeout(kbTimer);kbTimer=null}setKbOpen(true);setTimeout(function(){e.target.scrollIntoView({behavior:"smooth",block:"center"})},300)}};
@@ -600,6 +626,7 @@ h("div",{style:{display:"flex",justifyContent:"center",alignItems:"center"}},
 h(DateNav,{date:date,setDate:setDate}))),
 
 h("div",{style:{flex:1,overflowY:"auto",WebkitOverflowScrolling:"touch",overscrollBehavior:"contain"}},
+h(UpdateBanner,{onExport:exportAppJSON}),
 h(InstallBanner),
 h(ApiKeyBanner,{key:apiKeyEpoch,onOpenSettings:function(){setSheet("settings")}}),
 h("div",{style:{background:"var(--card)",padding:"0 20px 4px",position:"relative"}},
@@ -637,7 +664,7 @@ h("div",{style:{display:"flex",borderTop:"1px solid var(--border-light)"}},
 h("div",{style:{flex:1,textAlign:"center",padding:"8px 0",borderRight:"1px solid var(--border-light)"}},h("div",{style:{fontSize:18,fontWeight:800,color:"var(--teal)",fontVariantNumeric:"tabular-nums"}},e.calories,h("span",{style:{fontSize:10,fontWeight:400}},"kcal")),h("div",{style:{fontSize:10,color:"var(--text-ter)"}},"消耗熱量")),
 h("div",{style:{flex:1,textAlign:"center",padding:"8px 0"}},h("div",{style:{fontSize:18,fontWeight:800,color:"var(--blue)",fontVariantNumeric:"tabular-nums"}},e.duration||"—",h("span",{style:{fontSize:10,fontWeight:400}},e.duration?"min":"")),h("div",{style:{fontSize:10,color:"var(--text-ter)"}},"運動時長"))))}))),
 
-tab==="favorites"&&h(FavoritesTab,{favorites:favorites,onSave:saveFavs,settings:settings,showToast:showToast,onAddToDay:async function(fav){await addFood(date,{id:uid(),desc:fav.name,protein:fav.protein,fat:fav.fat,carbs:fav.carbs,time:new Date().toLocaleTimeString("zh-TW",{hour:"2-digit",minute:"2-digit"})});showToast("已加入 "+fav.name)}}),
+tab==="favorites"&&h(FavoritesTab,{favorites:favorites,onSave:saveFavs,settings:settings,date:date,showToast:showToast,onAddToDay:async function(fav){await addFood(date,{id:uid(),desc:fav.name,protein:fav.protein,fat:fav.fat,carbs:fav.carbs,time:new Date().toLocaleTimeString("zh-TW",{hour:"2-digit",minute:"2-digit"})});showToast("已加入 "+fav.name)}}),
 tab==="history"&&h(HistoryTab,{allDays:allDays,goals:goals,onSelect:function(d){setDate(d);setTab("records")}}))),
 
 !kbOpen&&!sheet&&h("div",{style:{flexShrink:0,background:"var(--card)",borderTop:"1px solid var(--border)",padding:"8px 12px calc(12px + env(safe-area-inset-bottom, 0px))",boxShadow:"0 -4px 16px rgba(44,37,24,.06)"}},
@@ -648,13 +675,36 @@ h("button",{style:A({},S.btn(),{flex:1,minHeight:46,borderRadius:"var(--radius-s
 
 sheet==="food"&&h(FoodSheet,{defaultDate:date,settings:settings,onAdd:addFood,onClose:function(){setSheet(null)}}),
 sheet==="exercise"&&h(ExerciseSheet,{defaultDate:date,onAdd:addExercise,onClose:function(){setSheet(null)}}),
-sheet==="quickadd"&&h(QuickAddSheet,{favorites:favorites,onAdd:async function(fav){await addFood(date,{id:uid(),desc:fav.name,protein:fav.protein,fat:fav.fat,carbs:fav.carbs,time:new Date().toLocaleTimeString("zh-TW",{hour:"2-digit",minute:"2-digit"})});setSheet(null);showToast("已加入 "+fav.name)},onReorder:saveFavs,onClose:function(){setSheet(null)}}),
+sheet==="quickadd"&&h(QuickAddSheet,{favorites:favorites,date:date,onAdd:async function(fav){await addFood(date,{id:uid(),desc:fav.name,protein:fav.protein,fat:fav.fat,carbs:fav.carbs,time:new Date().toLocaleTimeString("zh-TW",{hour:"2-digit",minute:"2-digit"})});setSheet(null);showToast("已加入 "+fav.name)},onReorder:saveFavs,onClose:function(){setSheet(null)}}),
 sheet==="settings"&&h(SettingsSheet,{goals:goals,settings:settings,onSaveGoals:saveGoals,onSaveSettings:saveSett,onSaveFavorites:saveFavs,onClose:function(){setSheet(null)},allDays:allDays,favorites:favorites,onImport:handleImport,showToast:showToast,onApiKeySaved:function(){localStorage.removeItem("fl_apikey_banner_dismissed");bumpApiKeyEpoch(function(x){return x+1})}}),
 toast&&h("div",{className:"fade-in",style:S.toast},toast));
 }
 
 ReactDOM.createRoot(document.getElementById("root")).render(h(App));
-if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(function(){})}
+if('serviceWorker' in navigator){
+navigator.serviceWorker.register('sw.js').then(function(reg){
+window.__swReg=reg;
+reg.addEventListener('updatefound',function(){
+var nw=reg.installing;
+if(!nw)return;
+nw.addEventListener('statechange',function(){
+if(nw.state==='installed'&&navigator.serviceWorker.controller){nw.postMessage({type:'GET_UPDATE_TYPE'})}
+});
+});
+navigator.serviceWorker.addEventListener('message',function(e){
+if(!(e.data&&e.data.type==='UPDATE_TYPE'))return;
+var ut=e.data.value||'safe';
+if(ut==='silent'){if(reg.waiting)reg.waiting.postMessage({type:'SKIP_WAITING'});return}
+window.dispatchEvent(new CustomEvent('swUpdate',{detail:{updateType:ut}}));
+});
+var refreshing=false;
+navigator.serviceWorker.addEventListener('controllerchange',function(){
+if(refreshing)return;
+refreshing=true;
+location.reload();
+});
+}).catch(function(){})
+}
 </script>
 </body>
 </html>

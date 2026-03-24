@@ -1,9 +1,17 @@
-var CACHE = 'fitlog-v5';
+var CACHE = 'fitlog-v6';
+var UPDATE_TYPE = 'safe'; // 'silent' | 'safe' | 'data'
 var URLS = ['./', './index.html'];
 
 self.addEventListener('install', function(e) {
   e.waitUntil(caches.open(CACHE).then(function(c) { return c.addAll(URLS); }));
-  self.skipWaiting();
+});
+
+self.addEventListener('message', function(e) {
+  if (!e.data) return;
+  if (e.data.type === 'SKIP_WAITING') self.skipWaiting();
+  if (e.data.type === 'GET_UPDATE_TYPE' && e.source && e.source.postMessage) {
+    e.source.postMessage({ type: 'UPDATE_TYPE', value: UPDATE_TYPE });
+  }
 });
 
 self.addEventListener('activate', function(e) {
