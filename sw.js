@@ -1,6 +1,6 @@
-var CACHE = 'fitlog-v6';
+var CACHE = 'fitlog-v7';
 var UPDATE_TYPE = 'safe'; // 'silent' | 'safe' | 'data'
-var URLS = ['./', './index.html'];
+var URLS = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', function(e) {
   e.waitUntil(caches.open(CACHE).then(function(c) { return c.addAll(URLS); }));
