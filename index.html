@@ -93,7 +93,11 @@ try{google.accounts.oauth2.revoke(_gdriveToken,function(){})}catch(e){}
 }
 _gdriveToken=null;
 }
-function gdriveSignIn(interactive){
+function gdriveSignIn(promptMode){
+var promptStr="";
+if(promptMode===true)promptStr="consent";
+else if(promptMode===false||promptMode==null)promptStr="";
+else if(typeof promptMode==="string")promptStr=promptMode;
 return new Promise(function(resolve,reject){
 var cid=FL_GDRIVE_CLIENT_ID&&String(FL_GDRIVE_CLIENT_ID).trim();
 if(!cid){reject(new Error("尚未設定 OAuth Client ID（請編輯 index.html 的 FL_GDRIVE_CLIENT_ID）"));return}
@@ -106,22 +110,35 @@ if(r&&r.access_token){_gdriveToken=r.access_token;resolve(_gdriveToken)}
 else reject(new Error((r&&r.error)||"登入已取消或失敗"))
 }
 });
-client.requestAccessToken({prompt:interactive?"consent":""});
+client.requestAccessToken({prompt:promptStr});
 });
 }
-async function gdriveFindBackupFileId(){
+async function gdriveEnsureAccessToken(){
+if(gdriveGetToken())return;
+try{await gdriveSignIn("")}catch(e){}
+if(gdriveGetToken())return;
+await gdriveSignIn("select_account");
+}
+async function gdriveRefreshTokenAfter401(){
+gdriveClearToken();
+try{await gdriveSignIn("")}catch(e){}
+if(!gdriveGetToken())await gdriveSignIn("select_account");
+}
+async function gdriveFetchBackupFileMeta(){
 var q="name = '"+FL_GDRIVE_BACKUP_NAME.replace(/'/g,"\\'")+"' and 'appDataFolder' in parents and trashed = false";
 var url="https://www.googleapis.com/drive/v3/files?q="+encodeURIComponent(q)+"&spaces=appDataFolder&fields=files(id,modifiedTime)";
 var res=await fetch(url,{headers:{Authorization:"Bearer "+_gdriveToken}});
 var data=await res.json().catch(function(){return{}});
 if(res.status===401){gdriveClearToken();throw new Error("GDRIVE_AUTH_EXPIRED")}
 if(!res.ok)throw new Error((data.error&&data.error.message)||"Drive 查詢失敗");
-return data.files&&data.files[0]?data.files[0].id:null;
+var f=data.files&&data.files[0];
+return f?{id:f.id,modifiedTime:f.modifiedTime||null}:null;
 }
 async function gdriveUploadBackup(payload){
 if(!navigator.onLine)throw new Error("OFFLINE");
 var bodyStr=JSON.stringify(payload);
-var fileId=await gdriveFindBackupFileId();
+var prevMeta=await gdriveFetchBackupFileMeta();
+var fileId=prevMeta?prevMeta.id:null;
 var res,err,meta;
 if(fileId){
 res=await fetch("https://www.googleapis.com/upload/drive/v3/files/"+encodeURIComponent(fileId)+"?uploadType=media",{method:"PATCH",headers:{Authorization:"Bearer "+_gdriveToken,"Content-Type":"application/json; charset=UTF-8"},body:bodyStr});
@@ -141,12 +158,12 @@ return meta.modifiedTime||(new Date().toISOString());
 }
 async function gdriveDownloadBackupJson(){
 if(!navigator.onLine)throw new Error("OFFLINE");
-var fileId=await gdriveFindBackupFileId();
-if(!fileId)return null;
-var res=await fetch("https://www.googleapis.com/drive/v3/files/"+encodeURIComponent(fileId)+"?alt=media",{headers:{Authorization:"Bearer "+_gdriveToken}});
+var meta=await gdriveFetchBackupFileMeta();
+if(!meta||!meta.id)return{json:null,modifiedTime:null};
+var res=await fetch("https://www.googleapis.com/drive/v3/files/"+encodeURIComponent(meta.id)+"?alt=media",{headers:{Authorization:"Bearer "+_gdriveToken}});
 if(res.status===401){gdriveClearToken();throw new Error("GDRIVE_AUTH_EXPIRED")}
 if(!res.ok)throw new Error("下載備份失敗");
-return JSON.parse(await res.text());
+return{json:JSON.parse(await res.text()),modifiedTime:meta.modifiedTime||null};
 }
 function readLastGdriveBackupIso(){try{return localStorage.getItem(FL_LAST_GDRIVE_BACKUP_KEY)}catch(e){return null}}
 function writeLastGdriveBackupIso(iso){try{if(iso)localStorage.setItem(FL_LAST_GDRIVE_BACKUP_KEY,iso);else localStorage.removeItem(FL_LAST_GDRIVE_BACKUP_KEY)}catch(e){}}
@@ -672,7 +689,7 @@ h("div",{style:{fontSize:12,color:"var(--text-ter)",marginBottom:10,lineHeight:1
 !FL_GDRIVE_CLIENT_ID||!String(FL_GDRIVE_CLIENT_ID).trim()?h("div",{style:{fontSize:12,color:"var(--amber)",marginBottom:10,padding:"10px 12px",background:"var(--amber-light)",borderRadius:"var(--radius-xs)",border:"1px solid var(--amber-border)"}},"尚未設定 OAuth Client ID：請編輯 ",h("code",{style:{fontSize:11}},"index.html")," 頂端的 ",h("code",{style:{fontSize:11}},"FL_GDRIVE_CLIENT_ID"),"（見下方展開說明）。"):null,
 h("div",{style:{fontSize:12,color:"var(--text-sec)",marginBottom:8}},"上次備份：",h("b",{style:{color:"var(--text)"}},formatBackupDisplay(p.lastGdriveIso))),
 h("div",{style:{display:"flex",flexWrap:"wrap",gap:8,marginBottom:10}},
-gdSigned?h("button",{onClick:function(){gdriveSignOut();setGdSigned(false);p.showToast("已登出 Google")},style:A({},S.btn("var(--card-alt)","var(--text-sec)","1px solid var(--border)"),{minHeight:40,flex:"1 1 120px",borderRadius:"var(--radius-xs)",fontSize:13})},"登出 Google"):h("button",{onClick:async function(){setGdBusy(true);try{await gdriveSignIn(true);setGdSigned(true);p.showToast("✅ 已登入 Google")}catch(e){p.showToast("登入失敗："+((e&&e.message)||"請重試"))}setGdBusy(false)},disabled:gdBusy||!FL_GDRIVE_CLIENT_ID||!String(FL_GDRIVE_CLIENT_ID).trim(),style:A({},S.btn("var(--blue)"),{minHeight:40,flex:"1 1 120px",borderRadius:"var(--radius-xs)",fontSize:13,opacity:gdBusy?0.6:1})},gdBusy?"…":"登入 Google"),
+gdSigned?h("button",{onClick:function(){gdriveSignOut();setGdSigned(false);p.showToast("已登出 Google")},style:A({},S.btn("var(--card-alt)","var(--text-sec)","1px solid var(--border)"),{minHeight:40,flex:"1 1 120px",borderRadius:"var(--radius-xs)",fontSize:13})},"登出 Google"):h("button",{onClick:async function(){setGdBusy(true);try{await gdriveSignIn(true);setGdSigned(true);if(p.onSyncGdriveLastBackup)await p.onSyncGdriveLastBackup();p.showToast("✅ 已登入 Google")}catch(e){p.showToast("登入失敗："+((e&&e.message)||"請重試"))}setGdBusy(false)},disabled:gdBusy||!FL_GDRIVE_CLIENT_ID||!String(FL_GDRIVE_CLIENT_ID).trim(),style:A({},S.btn("var(--blue)"),{minHeight:40,flex:"1 1 120px",borderRadius:"var(--radius-xs)",fontSize:13,opacity:gdBusy?0.6:1})},gdBusy?"…":"登入 Google"),
 h("button",{onClick:async function(){setGdBusy(true);try{await p.onGdriveBackup()}catch(e){}setGdBusy(false)},disabled:gdBusy||!FL_GDRIVE_CLIENT_ID||!String(FL_GDRIVE_CLIENT_ID).trim(),style:A({},S.btn("var(--teal)"),{minHeight:40,flex:"1 1 120px",borderRadius:"var(--radius-xs)",fontSize:13})},"立即備份"),
 h("button",{onClick:async function(){setGdBusy(true);try{await p.onGdriveRestore()}catch(e){}setGdBusy(false)},disabled:gdBusy||!FL_GDRIVE_CLIENT_ID||!String(FL_GDRIVE_CLIENT_ID).trim(),style:A({},S.btn("var(--amber-light)","var(--amber)","1px solid var(--amber-border)"),{minHeight:40,flex:"1 1 120px",borderRadius:"var(--radius-xs)",fontSize:13})},"從雲端還原")),
 h("button",{onClick:function(){setGdHelp(!gdHelp)},style:A({},S.btn("var(--card-alt)","var(--text-sec)","1px solid var(--border)"),{width:"100%",minHeight:36,borderRadius:"var(--radius-xs)",fontSize:12,marginBottom:10})},gdHelp?"▲ 收合 OAuth 設定步驟":"▼ 展開 OAuth 設定步驟（部署／開發者）"),
@@ -689,7 +706,6 @@ h("li",{key:7},'Fork 專案自架時：須在 GCP 為「你的網域」新增相
 h("div",{style:{marginTop:10,fontSize:10,color:"var(--text-ter)"}},"Client ID 可公開；真正限制誰能用的是 GCP 裡的授權來源白名單。"))),
 h("div",{style:{marginBottom:24}},h("div",{style:{fontWeight:700,fontSize:14,marginBottom:12}},"💾 資料管理"),
 h("div",{style:{display:"flex",gap:8,marginBottom:12}},[["📅",dc,"天"],["🍽",tf,"飲食"],["🏃",te,"運動"],["⭐",p.favorites.length,"常用"]].map(function(x){return h("div",{key:x[2],style:{flex:1,textAlign:"center",background:"var(--card-alt)",borderRadius:"var(--radius-xs)",padding:"10px 4px"}},h("div",{style:{fontSize:10}},x[0]),h("div",{style:{fontSize:18,fontWeight:800,color:"var(--text)",fontVariantNumeric:"tabular-nums"}},x[1]),h("div",{style:{fontSize:10,color:"var(--text-ter)"}},x[2]))})),
-(function(){var usage=p.storageUsage||{usedBytes:0,quotaBytes:FL_LOCALSTORAGE_QUOTA_BYTES},pct=Math.min(100,Math.round(usage.usedBytes/Math.max(usage.quotaBytes,1)*100)),kbUse=(usage.usedBytes/1024).toFixed(1),kbQ=Math.round(usage.quotaBytes/1024),bar=pct>=90?"var(--red)":pct>=70?"var(--amber)":"var(--teal)",tx=pct>=90?"var(--red)":pct>=70?"var(--amber)":"var(--text)";return h("div",{style:{marginBottom:12,padding:"10px 12px",background:"var(--card-alt)",borderRadius:"var(--radius-xs)",border:"1px solid var(--border-light)"}},h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:6}},h("span",{style:{fontSize:11,color:"var(--text-sec)"}},"本機儲存用量（約略）"),h("span",{style:{fontSize:11,fontWeight:700,color:tx,fontVariantNumeric:"tabular-nums"}},kbUse," KB / 約 ",String(kbQ).replace(/\B(?=(\d{3})+(?!\d))/g,",")," KB")),h("div",{style:{height:6,borderRadius:3,background:"var(--border)",overflow:"hidden"}},h("div",{style:{height:"100%",width:pct+"%",background:bar,transition:"width .2s ease"}})),h("div",{style:{fontSize:10,color:"var(--text-ter)",marginTop:6,lineHeight:1.45}},"約 ",pct,"% · 紀錄在 IndexedDB（若瀏覽器支援會用 StorageManager 配額）；Gemini Key 等仍可能在 localStorage。快滿時請匯出備份並刪除舊紀錄。"))})(),
 h("div",{style:{fontSize:11,color:"var(--text-ter)",marginBottom:10,lineHeight:1.45,padding:"10px 12px",background:"var(--blue-light)",borderRadius:"var(--radius-xs)",border:"1px solid var(--blue-border)"}},"匯入前會自動清洗：僅接受 YYYY-MM-DD 日期、單筆描述 ≤ "+FL_DESC_MAX_LEN+" 字；單次最多 "+FL_IMPORT_MAX_DATES+" 天；總筆數上限 "+FL_IMPORT_MAX_ENTRIES+"；營養／熱量數值會限制在合理範圍內。可疑鍵名與異常欄位會略過或截斷。"),
 h("div",{style:{display:"flex",gap:8,marginBottom:10}},h("button",{onClick:exportCSV,style:A({},S.btn("var(--blue)"),{flex:1,minHeight:44,borderRadius:"var(--radius-sm)",fontSize:14})},"📤 匯出 CSV"),h("input",{ref:iRef,type:"file",accept:".csv",onChange:importCSV,style:{display:"none"}}),h("button",{onClick:function(){iRef.current&&iRef.current.click()},style:A({},S.btn("var(--amber-light)","var(--amber)","1.5px solid var(--amber-border)"),{flex:1,minHeight:44,borderRadius:"var(--radius-sm)",fontSize:14})},"📥 匯入 CSV")),
 h("div",{style:{display:"flex",gap:8,marginBottom:10}},h("button",{onClick:exportJSON,style:A({},S.btn("var(--blue)"),{flex:1,minHeight:44,borderRadius:"var(--radius-sm)",fontSize:14})},"📤 匯出 JSON"),h("input",{ref:jRef,type:"file",accept:".json",onChange:importJSON,style:{display:"none"}}),h("button",{onClick:function(){jRef.current&&jRef.current.click()},style:A({},S.btn("var(--amber-light)","var(--amber)","1.5px solid var(--amber-border)"),{flex:1,minHeight:44,borderRadius:"var(--radius-sm)",fontSize:14})},"📥 匯入 JSON")),
@@ -779,7 +795,6 @@ var setDate=function(d){setClearConfirm(null);_setDate(d)};
 var _kb=useState(false),kbOpen=_kb[0],setKbOpen=_kb[1];
 var _ape=useState(0),apiKeyEpoch=_ape[0],bumpApiKeyEpoch=_ape[1];
 var _sup=useState(0),storageUsagePct=_sup[0],setStorageUsagePct=_sup[1];
-var _sud=useState({usedBytes:0,quotaBytes:FL_LOCALSTORAGE_QUOTA_BYTES}),storageUsageDetail=_sud[0],setStorageUsageDetail=_sud[1];
 var _lgb=useState(function(){return readLastGdriveBackupIso()}),lastGdriveBackupIso=_lgb[0],setLastGdriveBackupIso=_lgb[1];
 var _bsd=useState(function(){try{return sessionStorage.getItem("fl_backup_stale_dismissed")==="1"}catch(e){return false}}),backupStaleDismissed=_bsd[0],setBackupStaleDismissed=_bsd[1];
 var _sbd=useState(function(){try{return sessionStorage.getItem("fl_storage_warn_dismissed")==="1"}catch(e){return false}}),storageBannerDismissed=_sbd[0],setStorageBannerDismissed=_sbd[1];
@@ -787,7 +802,8 @@ var _ui=useState(null),undoItem=_ui[0],setUndoItem=_ui[1];
 var toastTimerRef=useRef(null),undoTimerRef=useRef(null),gdAutoBackupOnce=useRef(false);
 var showToast=function(m){if(toastTimerRef.current){clearTimeout(toastTimerRef.current);toastTimerRef.current=null}setToast(m);toastTimerRef.current=setTimeout(function(){toastTimerRef.current=null;setToast(null)},2500)};
 var exportAppJSON=function(){exportBackupJSON({version:1,exportedAt:new Date().toISOString(),allDays:allDays,favorites:favorites,goals:goals,settings:{defaultRules:(settings&&settings.defaultRules)||""}},showToast)};
-var refreshStorageUsage=async function(){try{var u=await getFlStorageUsage();setStorageUsageDetail(u);setStorageUsagePct(Math.min(100,Math.round(u.usedBytes/Math.max(u.quotaBytes,1)*100)))}catch(e){}};
+var refreshStorageUsage=async function(){try{var u=await getFlStorageUsage();setStorageUsagePct(Math.min(100,Math.round(u.usedBytes/Math.max(u.quotaBytes,1)*100)))}catch(e){}};
+var syncLastGdriveBackupFromCloud=async function(){try{if(!gdriveGetToken())return;var m=await gdriveFetchBackupFileMeta();if(m&&m.modifiedTime){writeLastGdriveBackupIso(m.modifiedTime);setLastGdriveBackupIso(m.modifiedTime)}}catch(e){}};
 var clearUndoTimer=function(){if(undoTimerRef.current){clearTimeout(undoTimerRef.current);undoTimerRef.current=null}};
 var scheduleUndoClear=function(){clearUndoTimer();undoTimerRef.current=setTimeout(function(){undoTimerRef.current=null;setUndoItem(null)},5000)};
 
@@ -799,6 +815,7 @@ return function(){document.removeEventListener("focusin",onF);document.removeEve
 
 useEffect(function(){(async function(){try{await migrateLocalStorageToIdbOnce();var r=await Promise.all([DB.get("favorites"),DB.get("settings"),DB.get("goals")]);if(r[0])setFavorites(r[0]);if(r[1])setSettings(r[1]);if(r[2])setGoals(r[2]);var keys=await DB.listKeys("day:");var days={};for(var i=0;i<keys.length;i++){var v=await DB.get(keys[i]);if(v)days[keys[i].replace("day:","")]=v}setAllDays(days)}catch(e){}setLoading(false);await refreshStorageUsage()})()},[]);
 useEffect(function(){daysRef.current=allDays},[allDays]);
+useEffect(function(){if(sheet!=="settings")return;syncLastGdriveBackupFromCloud()},[sheet]);
 useEffect(function(){return function(){clearUndoTimer();if(toastTimerRef.current){clearTimeout(toastTimerRef.current);toastTimerRef.current=null}}},[]);
 
 var runDayPersist=function(task){var q=persistQ.current.then(function(){return Promise.resolve().then(task)});persistQ.current=q.catch(function(e){if(e&&e.code===FL_STORAGE_FULL)showToast("⚠️ 儲存空間不足，請先匯出備份並清除舊資料");else if(e)showToast("儲存失敗");return undefined});return q};
@@ -856,9 +873,13 @@ return function(){cancelled=true};
 var doGdriveBackup=async function(){
 try{
 if(!navigator.onLine){showToast("目前離線，無法備份");return}
-await gdriveSignIn(true);
-var payload=buildFitlogBackupPayload(allDays,favorites,goals,settings);
-var mt=await gdriveUploadBackup(payload);
+var run=async function(){
+await gdriveEnsureAccessToken();
+return await gdriveUploadBackup(buildFitlogBackupPayload(allDays,favorites,goals,settings));
+};
+var mt;
+try{mt=await run()}catch(e){
+if(e&&e.message==="GDRIVE_AUTH_EXPIRED"){await gdriveRefreshTokenAfter401();mt=await run()}else throw e}
 var iso=typeof mt==="string"?mt:(new Date().toISOString());
 writeLastGdriveBackupIso(iso);
 setLastGdriveBackupIso(iso);
@@ -874,10 +895,15 @@ var doGdriveRestore=async function(){
 try{
 if(!navigator.onLine){showToast("目前離線，無法還原");return}
 if(!window.confirm("從雲端還原會覆寫本機資料（等同 JSON 匯入）。建議先匯出備份。確定繼續？"))return;
-await gdriveSignIn(true);
-var data=await gdriveDownloadBackupJson();
-if(!data)throw new Error("雲端尚無備份檔");
-await applyFullBackupPayload(data);
+var run=async function(){
+await gdriveEnsureAccessToken();
+var dl=await gdriveDownloadBackupJson();
+if(!dl||!dl.json)throw new Error("雲端尚無備份檔");
+await applyFullBackupPayload(dl.json);
+if(dl.modifiedTime){writeLastGdriveBackupIso(dl.modifiedTime);setLastGdriveBackupIso(dl.modifiedTime)}
+};
+try{await run()}catch(e){
+if(e&&e.message==="GDRIVE_AUTH_EXPIRED"){await gdriveRefreshTokenAfter401();await run()}else throw e}
 showToast("✅ 已從雲端還原");
 }catch(e){
 var m=(e&&e.message)||"";
@@ -972,7 +998,7 @@ h("button",{style:A({},S.btn(),{flex:1,minHeight:46,borderRadius:"var(--radius-s
 sheet==="food"&&h(FoodSheet,{defaultDate:date,settings:settings,onAdd:addFood,onClose:function(){setSheet(null)}}),
 sheet==="exercise"&&h(ExerciseSheet,{defaultDate:date,onAdd:addExercise,onClose:function(){setSheet(null)}}),
 sheet==="quickadd"&&h(QuickAddSheet,{favorites:favorites,date:date,onAdd:async function(fav){try{await addFood(date,{id:uid(),desc:fav.name,protein:fav.protein,fat:fav.fat,carbs:fav.carbs,time:new Date().toLocaleTimeString("zh-TW",{hour:"2-digit",minute:"2-digit"})});setSheet(null);showToast("已加入 "+fav.name)}catch(unused){}},onReorder:saveFavs,onClose:function(){setSheet(null)}}),
-sheet==="settings"&&h(SettingsSheet,{goals:goals,settings:settings,onSaveGoals:saveGoals,onSaveSettings:saveSett,onSaveFavorites:saveFavs,onClose:function(){setSheet(null)},allDays:allDays,favorites:favorites,onImport:handleImport,showToast:showToast,onApiKeySaved:function(){localStorage.removeItem("fl_apikey_banner_dismissed");bumpApiKeyEpoch(function(x){return x+1})},storageUsage:storageUsageDetail,lastGdriveIso:lastGdriveBackupIso,onGdriveBackup:doGdriveBackup,onGdriveRestore:doGdriveRestore}),
+sheet==="settings"&&h(SettingsSheet,{goals:goals,settings:settings,onSaveGoals:saveGoals,onSaveSettings:saveSett,onSaveFavorites:saveFavs,onClose:function(){setSheet(null)},allDays:allDays,favorites:favorites,onImport:handleImport,showToast:showToast,onApiKeySaved:function(){localStorage.removeItem("fl_apikey_banner_dismissed");bumpApiKeyEpoch(function(x){return x+1})},lastGdriveIso:lastGdriveBackupIso,onSyncGdriveLastBackup:syncLastGdriveBackupFromCloud,onGdriveBackup:doGdriveBackup,onGdriveRestore:doGdriveRestore}),
 undoItem&&h("div",{className:"fade-in",style:{position:"fixed",left:16,right:16,bottom:100,maxWidth:448,margin:"0 auto",zIndex:205,background:"var(--text)",color:"#fff",borderRadius:"var(--radius-sm)",padding:"10px 14px",fontSize:13,fontWeight:500,boxShadow:"var(--shadow-lg)",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}},
 h("span",{style:{flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},"已刪除 ",undoItem.desc),
 h("button",{onClick:function(){undoRestore()},style:{background:"none",border:"none",color:"#b8e8d9",fontWeight:700,fontSize:13,cursor:"pointer",flexShrink:0,padding:"6px 4px",WebkitTapHighlightColor:"transparent"}},"復原")),
