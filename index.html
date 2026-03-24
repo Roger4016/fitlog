@@ -113,6 +113,9 @@ else reject(new Error((r&&r.error)||"登入已取消或失敗"))
 client.requestAccessToken({prompt:promptStr});
 });
 }
+function gdriveTrySilentSignIn(){
+return gdriveSignIn("");
+}
 async function gdriveEnsureAccessToken(){
 if(gdriveGetToken())return;
 try{await gdriveSignIn("")}catch(e){}
@@ -659,6 +662,21 @@ var _gh=useState(false),gdHelp=_gh[0],setGdHelp=_gh[1];
 var _gb=useState(false),gdBusy=_gb[0],setGdBusy=_gb[1];
 var _gsi=useState(function(){return !!gdriveGetToken()}),gdSigned=_gsi[0],setGdSigned=_gsi[1];
 useEffect(function(){var id=setTimeout(function(){setKeyFieldRo(false)},400);return function(){clearTimeout(id)}},[]);
+useEffect(function(){
+if(!FL_GDRIVE_CLIENT_ID||!String(FL_GDRIVE_CLIENT_ID).trim())return;
+var cancelled=false;
+gdriveTrySilentSignIn().then(function(){
+if(cancelled)return;
+if(gdriveGetToken()){
+setGdSigned(true);
+if(p.onSyncGdriveLastBackup)return p.onSyncGdriveLastBackup();
+}
+}).catch(function(){
+if(cancelled)return;
+setGdSigned(!!gdriveGetToken());
+});
+return function(){cancelled=true};
+},[]);
 var gcal=calcCal(g.protein,g.fat,g.carbs),dc=Object.keys(p.allDays).length;
 var tf=Object.values(p.allDays).reduce(function(s,d){return s+(d.food||[]).length},0);
 var te=Object.values(p.allDays).reduce(function(s,d){return s+(d.exercise||[]).length},0);
@@ -685,7 +703,7 @@ h("div",{style:{marginBottom:24}},h("div",{style:{fontWeight:700,fontSize:14,mar
 h("textarea",{value:rules,onChange:function(e){setRules(e.target.value)},placeholder:"例：飲料預設手搖杯大杯700ml",style:A({},S.input,{minHeight:80,resize:"vertical"})}),
 h("button",{onClick:function(){p.onSaveSettings(A({},p.settings,{defaultRules:rules})).catch(function(){})},style:A({},S.btn(),{width:"100%",minHeight:44,borderRadius:"var(--radius-sm)",marginTop:10})},"儲存規則")),
 h("div",{style:{marginBottom:24}},h("div",{style:{fontWeight:700,fontSize:14,marginBottom:8}},"☁️ Google Drive 雲端備份"),
-h("div",{style:{fontSize:12,color:"var(--text-ter)",marginBottom:10,lineHeight:1.5}},"備份檔存在你 Google 帳號的「應用程式專屬資料夾」（一般檔案列表看不到）。登入狀態僅保留在這次瀏覽，關閉分頁後需重新登入才能備份／還原。"),
+h("div",{style:{fontSize:12,color:"var(--text-ter)",marginBottom:10,lineHeight:1.5}},"備份檔存在你 Google 帳號的「應用程式專屬資料夾」（一般檔案列表看不到）。OAuth token 不寫入本機；關閉或滑掉 App 後會清空記憶體，但多數情況下重開時會先**靜默**向 Google 取回授權（失敗再按「登入 Google」）。"),
 !FL_GDRIVE_CLIENT_ID||!String(FL_GDRIVE_CLIENT_ID).trim()?h("div",{style:{fontSize:12,color:"var(--amber)",marginBottom:10,padding:"10px 12px",background:"var(--amber-light)",borderRadius:"var(--radius-xs)",border:"1px solid var(--amber-border)"}},"尚未設定 OAuth Client ID：請編輯 ",h("code",{style:{fontSize:11}},"index.html")," 頂端的 ",h("code",{style:{fontSize:11}},"FL_GDRIVE_CLIENT_ID"),"（見下方展開說明）。"):null,
 h("div",{style:{fontSize:12,color:"var(--text-sec)",marginBottom:8}},"上次備份：",h("b",{style:{color:"var(--text)"}},formatBackupDisplay(p.lastGdriveIso))),
 h("div",{style:{display:"flex",flexWrap:"wrap",gap:8,marginBottom:10}},
@@ -858,6 +876,9 @@ if(!navigator.onLine)return;
 var cancelled=false;
 var snapDays=A({},allDays),snapFav=favorites.slice?favorites.slice():[].concat(favorites||[]),snapGoals=A({},goals),snapSet=A({},settings);
 gdriveSignIn(false).then(function(){
+if(cancelled||!gdriveGetToken())return;
+return syncLastGdriveBackupFromCloud();
+}).then(function(){
 if(cancelled||!gdriveGetToken())return;
 return gdriveUploadBackup(buildFitlogBackupPayload(snapDays,snapFav,snapGoals,snapSet));
 }).then(function(mt){
