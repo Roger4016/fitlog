@@ -838,7 +838,7 @@ var _lgb=useState(function(){return readLastGdriveBackupIso()}),lastGdriveBackup
 var _bsd=useState(function(){try{return sessionStorage.getItem("fl_backup_stale_dismissed")==="1"}catch(e){return false}}),backupStaleDismissed=_bsd[0],setBackupStaleDismissed=_bsd[1];
 var _sbd=useState(function(){try{return sessionStorage.getItem("fl_storage_warn_dismissed")==="1"}catch(e){return false}}),storageBannerDismissed=_sbd[0],setStorageBannerDismissed=_sbd[1];
 var _ui=useState(null),undoItem=_ui[0],setUndoItem=_ui[1];
-var toastTimerRef=useRef(null),undoTimerRef=useRef(null);
+var toastTimerRef=useRef(null),undoTimerRef=useRef(null),sheetOpenedAtRef=useRef(0);
 var showToast=function(m){if(toastTimerRef.current){clearTimeout(toastTimerRef.current);toastTimerRef.current=null}setToast(m);toastTimerRef.current=setTimeout(function(){toastTimerRef.current=null;setToast(null)},2500)};
 var exportAppJSON=function(){exportBackupJSON({version:1,exportedAt:new Date().toISOString(),allDays:allDays,favorites:favorites,goals:goals,settings:{defaultRules:(settings&&settings.defaultRules)||""}},showToast)};
 var refreshStorageUsage=async function(){try{var u=await getFlStorageUsage();setStorageUsagePct(Math.min(100,Math.round(u.usedBytes/Math.max(u.quotaBytes,1)*100)))}catch(e){}};
@@ -847,16 +847,27 @@ var clearUndoTimer=function(){if(undoTimerRef.current){clearTimeout(undoTimerRef
 var scheduleUndoClear=function(){clearUndoTimer();undoTimerRef.current=setTimeout(function(){undoTimerRef.current=null;setUndoItem(null)},5000)};
 
 useEffect(function(){
-var kbTimer=null,scrollTimers=[],activeEl=null,vvAdded=false;
-var tryScrollIntoView=function(el){if(!el||!el.isConnected)return;try{el.scrollIntoView({behavior:"smooth",block:"center",inline:"nearest"})}catch(unused){}};
+var kbTimer=null,scrollTimers=[],activeEl=null,vvAdded=false,vvDebounceTimer=null;
+var tryScrollIntoView=function(el){if(!el||!el.isConnected)return;try{el.scrollIntoView({behavior:"auto",block:"center",inline:"nearest"})}catch(unused){}};
+var runScrollIntoView=function(el){requestAnimationFrame(function(){requestAnimationFrame(function(){tryScrollIntoView(el)})})};
 var clearScrollRetries=function(){for(var i=0;i<scrollTimers.length;i++)clearTimeout(scrollTimers[i]);scrollTimers=[]};
 var scheduleScrollRetries=function(el){
 clearScrollRetries();
 if(!el||!el.isConnected)return;
-var delays=[0,100,300,550,900],d;
-for(d=0;d<delays.length;d++)(function(ms){scrollTimers.push(setTimeout(function(){requestAnimationFrame(function(){requestAnimationFrame(function(){tryScrollIntoView(el)})})},ms))})(delays[d]);
+var opened=sheetOpenedAtRef.current,skew=opened?Date.now()-opened:999999;
+var inSheet=!!(el.closest&&el.closest(".slide-up"));
+var lead=inSheet&&skew<400?400-skew:0;
+scrollTimers.push(setTimeout(function(){runScrollIntoView(el)},lead));
+scrollTimers.push(setTimeout(function(){runScrollIntoView(el)},lead+200));
 };
-var vvScroll=function(){if(activeEl&&activeEl.isConnected)tryScrollIntoView(activeEl)};
+var vvScroll=function(){
+if(!activeEl||!activeEl.isConnected)return;
+if(vvDebounceTimer)clearTimeout(vvDebounceTimer);
+vvDebounceTimer=setTimeout(function(){
+vvDebounceTimer=null;
+runScrollIntoView(activeEl);
+},100);
+};
 var addVv=function(){if(vvAdded||!window.visualViewport)return;vvAdded=true;window.visualViewport.addEventListener("resize",vvScroll);window.visualViewport.addEventListener("scroll",vvScroll)};
 var removeVv=function(){if(!vvAdded||!window.visualViewport)return;vvAdded=false;window.visualViewport.removeEventListener("resize",vvScroll);window.visualViewport.removeEventListener("scroll",vvScroll)};
 var onF=function(e){
@@ -884,6 +895,7 @@ return;
 setKbOpen(false);
 activeEl=null;
 clearScrollRetries();
+if(vvDebounceTimer){clearTimeout(vvDebounceTimer);vvDebounceTimer=null}
 removeVv();
 },350);
 };
@@ -891,10 +903,13 @@ document.addEventListener("focusin",onF);document.addEventListener("focusout",on
 return function(){
 document.removeEventListener("focusin",onF);document.removeEventListener("focusout",onB);
 if(kbTimer)clearTimeout(kbTimer);
+if(vvDebounceTimer)clearTimeout(vvDebounceTimer);
 clearScrollRetries();
 removeVv();
 };
 },[]);
+
+useEffect(function(){sheetOpenedAtRef.current=sheet?Date.now():0},[sheet]);
 
 useEffect(function(){(async function(){try{await migrateLocalStorageToIdbOnce();var r=await Promise.all([DB.get("favorites"),DB.get("settings"),DB.get("goals")]);if(r[0])setFavorites(r[0]);if(r[1])setSettings(r[1]);if(r[2])setGoals(r[2]);var keys=await DB.listKeys("day:");var days={};for(var i=0;i<keys.length;i++){var v=await DB.get(keys[i]);if(v)days[keys[i].replace("day:","")]=v}setAllDays(days)}catch(e){}setLoading(false);await refreshStorageUsage()})()},[]);
 useEffect(function(){daysRef.current=allDays},[allDays]);
