@@ -846,11 +846,55 @@ var syncLastGdriveBackupFromCloud=async function(){try{if(!gdriveGetToken())retu
 var clearUndoTimer=function(){if(undoTimerRef.current){clearTimeout(undoTimerRef.current);undoTimerRef.current=null}};
 var scheduleUndoClear=function(){clearUndoTimer();undoTimerRef.current=setTimeout(function(){undoTimerRef.current=null;setUndoItem(null)},5000)};
 
-useEffect(function(){var kbTimer=null;
-var onF=function(e){if(e.target.tagName==="INPUT"||e.target.tagName==="TEXTAREA"){if(kbTimer){clearTimeout(kbTimer);kbTimer=null}setKbOpen(true);setTimeout(function(){e.target.scrollIntoView({behavior:"smooth",block:"center"})},300)}};
-var onB=function(e){if(e.target.tagName==="INPUT"||e.target.tagName==="TEXTAREA"){if(kbTimer)clearTimeout(kbTimer);kbTimer=setTimeout(function(){setKbOpen(false);kbTimer=null},350)}};
+useEffect(function(){
+var kbTimer=null,scrollTimers=[],activeEl=null,vvAdded=false;
+var tryScrollIntoView=function(el){if(!el||!el.isConnected)return;try{el.scrollIntoView({behavior:"smooth",block:"center",inline:"nearest"})}catch(unused){}};
+var clearScrollRetries=function(){for(var i=0;i<scrollTimers.length;i++)clearTimeout(scrollTimers[i]);scrollTimers=[]};
+var scheduleScrollRetries=function(el){
+clearScrollRetries();
+if(!el||!el.isConnected)return;
+var delays=[0,100,300,550,900],d;
+for(d=0;d<delays.length;d++)(function(ms){scrollTimers.push(setTimeout(function(){requestAnimationFrame(function(){requestAnimationFrame(function(){tryScrollIntoView(el)})})},ms))})(delays[d]);
+};
+var vvScroll=function(){if(activeEl&&activeEl.isConnected)tryScrollIntoView(activeEl)};
+var addVv=function(){if(vvAdded||!window.visualViewport)return;vvAdded=true;window.visualViewport.addEventListener("resize",vvScroll);window.visualViewport.addEventListener("scroll",vvScroll)};
+var removeVv=function(){if(!vvAdded||!window.visualViewport)return;vvAdded=false;window.visualViewport.removeEventListener("resize",vvScroll);window.visualViewport.removeEventListener("scroll",vvScroll)};
+var onF=function(e){
+var t=e.target;
+if(t.tagName!=="INPUT"&&t.tagName!=="TEXTAREA")return;
+if(t.disabled)return;
+if(kbTimer){clearTimeout(kbTimer);kbTimer=null}
+setKbOpen(true);
+activeEl=t;
+addVv();
+scheduleScrollRetries(t);
+};
+var onB=function(e){
+var t=e.target;
+if(t.tagName!=="INPUT"&&t.tagName!=="TEXTAREA")return;
+if(kbTimer)clearTimeout(kbTimer);
+kbTimer=setTimeout(function(){
+kbTimer=null;
+var ae=document.activeElement;
+if(ae&&(ae.tagName==="INPUT"||ae.tagName==="TEXTAREA")&&!ae.disabled){
+activeEl=ae;
+setKbOpen(true);
+return;
+}
+setKbOpen(false);
+activeEl=null;
+clearScrollRetries();
+removeVv();
+},350);
+};
 document.addEventListener("focusin",onF);document.addEventListener("focusout",onB);
-return function(){document.removeEventListener("focusin",onF);document.removeEventListener("focusout",onB);if(kbTimer)clearTimeout(kbTimer)}},[]);
+return function(){
+document.removeEventListener("focusin",onF);document.removeEventListener("focusout",onB);
+if(kbTimer)clearTimeout(kbTimer);
+clearScrollRetries();
+removeVv();
+};
+},[]);
 
 useEffect(function(){(async function(){try{await migrateLocalStorageToIdbOnce();var r=await Promise.all([DB.get("favorites"),DB.get("settings"),DB.get("goals")]);if(r[0])setFavorites(r[0]);if(r[1])setSettings(r[1]);if(r[2])setGoals(r[2]);var keys=await DB.listKeys("day:");var days={};for(var i=0;i<keys.length;i++){var v=await DB.get(keys[i]);if(v)days[keys[i].replace("day:","")]=v}setAllDays(days)}catch(e){}setLoading(false);await refreshStorageUsage()})()},[]);
 useEffect(function(){daysRef.current=allDays},[allDays]);
@@ -1011,7 +1055,7 @@ h("div",{style:{display:"flex",borderTop:"1px solid var(--border-light)"}},
 h("div",{style:{flex:1,textAlign:"center",padding:"8px 0",borderRight:"1px solid var(--border-light)"}},h("div",{style:{fontSize:18,fontWeight:800,color:"var(--teal)",fontVariantNumeric:"tabular-nums"}},e.calories,h("span",{style:{fontSize:10,fontWeight:400}},"kcal")),h("div",{style:{fontSize:10,color:"var(--text-ter)"}},"消耗熱量")),
 h("div",{style:{flex:1,textAlign:"center",padding:"8px 0"}},h("div",{style:{fontSize:18,fontWeight:800,color:"var(--blue)",fontVariantNumeric:"tabular-nums"}},e.duration||"—",h("span",{style:{fontSize:10,fontWeight:400}},e.duration?"min":"")),h("div",{style:{fontSize:10,color:"var(--text-ter)"}},"運動時長"))))}))),
 
-tab==="favorites"&&h(FavoritesTab,{favorites:favorites,onSave:saveFavs,settings:settings,date:date,showToast:showToast,onAddToDay:async function(fav){try{await addFood(date,{id:uid(),desc:fav.name,protein:fav.protein,fat:fav.fat,carbs:fav.carbs,time:new Date().toLocaleTimeString("zh-TW",{hour:"2-digit",minute:"2-digit"})});showToast("已加入 "+fav.name)}catch(unused){}}}),
+tab==="favorites"&&h(FavoritesTab,{favorites:favorites,onSave:saveFavs,settings:settings,date:date,showToast:showToast,onAddToDay:async function(fav){try{await addFood(date,{id:uid(),desc:fav.name,protein:fav.protein,fat:fav.fat,carbs:fav.carbs,time:new Date().toLocaleTimeString("zh-TW",{hour:"2-digit",minute:"2-digit"}),aiSummary:fav.name});showToast("已加入 "+fav.name)}catch(unused){}}}),
 tab==="history"&&h(HistoryTab,{allDays:allDays,goals:goals,onSelect:function(d){setDate(d);setTab("records")}}))),
 
 !kbOpen&&!sheet&&h("div",{style:{flexShrink:0,background:"var(--card)",borderTop:"1px solid var(--border)",padding:"8px 12px calc(12px + env(safe-area-inset-bottom, 0px))",boxShadow:"0 -4px 16px rgba(44,37,24,.06)"}},
@@ -1022,7 +1066,7 @@ h("button",{style:A({},S.btn(),{flex:1,minHeight:46,borderRadius:"var(--radius-s
 
 sheet==="food"&&h(FoodSheet,{defaultDate:date,settings:settings,onAdd:addFood,onClose:function(){setSheet(null)}}),
 sheet==="exercise"&&h(ExerciseSheet,{defaultDate:date,onAdd:addExercise,onClose:function(){setSheet(null)}}),
-sheet==="quickadd"&&h(QuickAddSheet,{favorites:favorites,date:date,onAdd:async function(fav){try{await addFood(date,{id:uid(),desc:fav.name,protein:fav.protein,fat:fav.fat,carbs:fav.carbs,time:new Date().toLocaleTimeString("zh-TW",{hour:"2-digit",minute:"2-digit"})});setSheet(null);showToast("已加入 "+fav.name)}catch(unused){}},onReorder:saveFavs,onClose:function(){setSheet(null)}}),
+sheet==="quickadd"&&h(QuickAddSheet,{favorites:favorites,date:date,onAdd:async function(fav){try{await addFood(date,{id:uid(),desc:fav.name,protein:fav.protein,fat:fav.fat,carbs:fav.carbs,time:new Date().toLocaleTimeString("zh-TW",{hour:"2-digit",minute:"2-digit"}),aiSummary:fav.name});setSheet(null);showToast("已加入 "+fav.name)}catch(unused){}},onReorder:saveFavs,onClose:function(){setSheet(null)}}),
 sheet==="settings"&&h(SettingsSheet,{goals:goals,settings:settings,onSaveGoals:saveGoals,onSaveSettings:saveSett,onSaveFavorites:saveFavs,onClose:function(){setSheet(null)},allDays:allDays,favorites:favorites,onImport:handleImport,showToast:showToast,onApiKeySaved:function(){localStorage.removeItem("fl_apikey_banner_dismissed");bumpApiKeyEpoch(function(x){return x+1})},lastGdriveIso:lastGdriveBackupIso,onSyncGdriveLastBackup:syncLastGdriveBackupFromCloud,onGdriveBackup:doGdriveBackup,onGdriveRestore:doGdriveRestore}),
 undoItem&&h("div",{className:"fade-in",style:{position:"fixed",left:16,right:16,bottom:100,maxWidth:448,margin:"0 auto",zIndex:205,background:"var(--text)",color:"#fff",borderRadius:"var(--radius-sm)",padding:"10px 14px",fontSize:13,fontWeight:500,boxShadow:"var(--shadow-lg)",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}},
 h("span",{style:{flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},"已刪除 ",undoItem.desc),
