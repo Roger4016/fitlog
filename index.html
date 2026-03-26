@@ -482,28 +482,40 @@ function RingProgress(p){var size=p.size||120,stroke=p.stroke||8,r=(size-stroke)
 var raw=p.max>0?p.value/p.max:0,pct=Math.max(0,raw),baseTarget=Math.min(pct,1),extraTarget=Math.min(Math.max(pct-1,0),1);
 var baseOff=circ*(1-baseTarget),extraOff=circ*(1-extraTarget);
 var baseCol=baseTarget<=0.85?"var(--teal)":"var(--amber)";
-var sX=useState(false),showExtra=sX[0],setShowExtra=sX[1],baseCircleRef=useRef(null),prevBaseRef=useRef(null),pctRef=useRef(pct);
+var RING_DUR="stroke-dashoffset .82s cubic-bezier(.22,.61,.36,1)";
+var sX=useState(false),showExtra=sX[0],setShowExtra=sX[1],sR=useState(false),redAnimOn=sR[0],setRedAnimOn=sR[1],baseCircleRef=useRef(null),prevBaseRef=useRef(null),pctRef=useRef(pct),redRaf2Ref=useRef(null);
 useEffect(function(){pctRef.current=pct;},[pct]);
 useEffect(function(){
-if(pct<=1){setShowExtra(false);prevBaseRef.current=baseTarget;return}
+if(pct<=1){setShowExtra(false);setRedAnimOn(false);prevBaseRef.current=baseTarget;return}
 var prev=prevBaseRef.current;
 if(prev==null||isNaN(+prev))prev=0;
-if(prev>=1-1e-6){setShowExtra(true);prevBaseRef.current=1}else{setShowExtra(false)}
+if(prev>=1-1e-6){setShowExtra(true);prevBaseRef.current=1}else{setShowExtra(false);setRedAnimOn(false)}
 },[pct,baseTarget,p.value,p.max]);
 useEffect(function(){
 if(pct<=1||showExtra)return;
 var prev=prevBaseRef.current;
 if(prev==null||isNaN(+prev))prev=0;
 if(prev>=1-1e-6)return;
-var t=setTimeout(function(){if(pctRef.current>1){prevBaseRef.current=1;setShowExtra(true)}},900);
+var t=setTimeout(function(){if(pctRef.current>1){prevBaseRef.current=1;setShowExtra(true)}},920);
 return function(){clearTimeout(t)}},[pct,showExtra,baseTarget,p.value,p.max]);
+useEffect(function(){
+if(!showExtra){
+setRedAnimOn(false);
+if(redRaf2Ref.current){cancelAnimationFrame(redRaf2Ref.current);redRaf2Ref.current=null}
+return}
+setRedAnimOn(false);
+var id1=requestAnimationFrame(function(){
+redRaf2Ref.current=requestAnimationFrame(function(){redRaf2Ref.current=null;setRedAnimOn(true)})});
+return function(){
+cancelAnimationFrame(id1);
+if(redRaf2Ref.current){cancelAnimationFrame(redRaf2Ref.current);redRaf2Ref.current=null}}},[showExtra]);
 var onBaseTransitionEnd=function(e){if(e.propertyName!=="stroke-dashoffset")return;if(e.target!==baseCircleRef.current)return;
 var cur=pctRef.current;if(cur<=1){prevBaseRef.current=Math.min(cur,1);return}
 prevBaseRef.current=1;setShowExtra(true)};
-var redDashOff=showExtra?extraOff:circ,redTransition=showExtra?"stroke-dashoffset .8s cubic-bezier(.22,.61,.36,1)":"none";
+var redRun=showExtra&&redAnimOn,redDashOff=redRun?extraOff:circ,redTransition=redRun?RING_DUR:"none";
 return h("svg",{width:size,height:size,style:{transform:"rotate(-90deg)",display:"block"}},
 h("circle",{cx:size/2,cy:size/2,r:r,fill:"none",stroke:"var(--border-light)",strokeWidth:stroke}),
-h("circle",{ref:baseCircleRef,cx:size/2,cy:size/2,r:r,fill:"none",stroke:baseCol,strokeWidth:stroke,strokeLinecap:"round",strokeDasharray:circ,strokeDashoffset:baseOff,onTransitionEnd:onBaseTransitionEnd,style:{transition:"stroke-dashoffset .8s cubic-bezier(.22,.61,.36,1),stroke .3s"}}),
+h("circle",{ref:baseCircleRef,cx:size/2,cy:size/2,r:r,fill:"none",stroke:baseCol,strokeWidth:stroke,strokeLinecap:"round",strokeDasharray:circ,strokeDashoffset:baseOff,onTransitionEnd:onBaseTransitionEnd,style:{transition:RING_DUR+",stroke .3s"}}),
 pct>1&&h("circle",{cx:size/2,cy:size/2,r:r,fill:"none",stroke:"var(--red)",strokeWidth:stroke,strokeLinecap:"round",strokeDasharray:circ,strokeDashoffset:redDashOff,style:{transition:redTransition}}))}
 
 function ImageUploadRow(p){var s=useState([]),pvs=s[0],setPvs=s[1],ref=useRef();
