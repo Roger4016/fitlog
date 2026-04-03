@@ -192,7 +192,8 @@ var FL_BLOCKED_OBJ_KEYS={__proto__:1,constructor:1,prototype:1};
 var GEMINI_URL_PRIMARY="https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent";
 var GEMINI_URL_FALLBACK="https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
 var MAX_GEMINI_KEYS=3;
-var _keyFlashQuotaUntil=[0,0,0];
+var _keyFlashQuotaUntil=(function(){try{var _r=sessionStorage.getItem("fl_quota_until");if(_r){var _p=JSON.parse(_r);if(Array.isArray(_p)&&_p.length>=3)return _p}}catch(e){}return[0,0,0]})();
+function _saveQuotaUntil(){try{sessionStorage.setItem("fl_quota_until",JSON.stringify(_keyFlashQuotaUntil))}catch(e){}}
 var _geminiActiveModel="gemini-3-flash-preview";
 function isBlockedImportKey(k){if(k==null)return true;var s=String(k);return!!FL_BLOCKED_OBJ_KEYS[s]||s.indexOf("__")===0}
 function isValidImportDateKey(dt){if(!dt||typeof dt!=="string")return false;if(!/^\d{4}-\d{2}-\d{2}$/.test(dt))return false;var p=dt.split("-"),y=+p[0],mo=+p[1],da=+p[2];if(y<1970||y>2100||mo<1||mo>12||da<1||da>31)return false;var test=new Date(dt+"T12:00:00");return test.getFullYear()===y&&test.getMonth()+1===mo&&test.getDate()===da}
@@ -285,11 +286,11 @@ async function callAI(parts,schema){
     allPrimaryQuota=false;
     try{
       var txtPrimary=await requestWithKey(GEMINI_URL_PRIMARY,keySlot,"gemini-3-flash-preview");
-      _keyFlashQuotaUntil[si]=0;
+      _keyFlashQuotaUntil[si]=0;_saveQuotaUntil();
       return txtPrimary;
     }catch(e1){
       lastErr=e1;
-      if(isQuotaErr(e1&&e1.message)){_keyFlashQuotaUntil[si]=Date.now()+60000;allPrimaryQuota=true;continue}
+      if(isQuotaErr(e1&&e1.message)){_keyFlashQuotaUntil[si]=Date.now()+60000;_saveQuotaUntil();allPrimaryQuota=true;continue}
       throw e1;
     }
   }
