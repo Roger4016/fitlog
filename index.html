@@ -1037,8 +1037,7 @@ if(t.disabled)return;
 if(kbTimer){clearTimeout(kbTimer);kbTimer=null}
 setKbOpen(true);
 activeEl=t;
-if(!sheetRef.current)addVv();
-scheduleScrollRetries(t);
+if(!sheetRef.current){addVv();scheduleScrollRetries(t);}
 };
 var onB=function(e){
 var t=e.target;
@@ -1073,10 +1072,10 @@ useEffect(function(){
 if(!sheet)return;
 if(!window.visualViewport)return;
 var vv=window.visualViewport;
+document.documentElement.style.setProperty("--vv-offset-top","0px");
 var vvScroll=function(){
 var kh=Math.max(0,window.innerHeight-vv.height-(vv.offsetTop||0));
 document.documentElement.style.setProperty("--keyboard-inset",kh+"px");
-document.documentElement.style.setProperty("--vv-offset-top",(vv.offsetTop||0)+"px");
 };
 vv.addEventListener("resize",vvScroll);
 vv.addEventListener("scroll",vvScroll);
