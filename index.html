@@ -259,10 +259,6 @@ async function callAI(parts,schema){
     var s=String(msg||"");
     return /resource_exhausted|rate\s*limit|quota|429|too\s*many\s*requests/i.test(s);
   };
-  var isModelErr=function(msg){
-    var s=String(msg||"");
-    return /503|unavailable|model.*not.*found|overloaded|service\s*unavailable/i.test(s);
-  };
   var isRetryableNetErr=function(e){
     if(!e)return false;
     if(e.name==="AbortError")return true;
@@ -303,25 +299,35 @@ async function callAI(parts,schema){
       throw e;
     }
   };
+  // ── 修正後的 runOnce ──
+  // 策略：先用所有 key 試高階模型（primary），任何 key 失敗都換下一把；
+  //       全部 primary 失敗後，再用所有 key 試低階模型（fallback）；
+  //       真的全失敗才拋出最後一個錯誤。
   var runOnce=async function(){
     while(_keyFlashQuotaUntil.length<MAX_GEMINI_KEYS)_keyFlashQuotaUntil.push(0);
-    var lastErr=null,allPrimaryQuota=true,now=Date.now();
+    var lastErr=null,now=Date.now(),anyPrimaryAttempted=false;
+    // --- Phase 1: 對每把 key 試 primary 模型 ---
     for(var si=0;si<MAX_GEMINI_KEYS;si++){
       var keySlot=slots[si];
       if(!keySlot)continue;
+      // 若這把 key 的 primary 配額還在冷卻中，跳過
       if(now<(_keyFlashQuotaUntil[si]||0))continue;
-      allPrimaryQuota=false;
+      anyPrimaryAttempted=true;
       try{
         var txtPrimary=await requestWithKey(GEMINI_URL_PRIMARY,keySlot,"gemini-3-flash-preview");
         _keyFlashQuotaUntil[si]=0;_saveQuotaUntil();
         return txtPrimary;
       }catch(e1){
         lastErr=e1;
-        if(isQuotaErr(e1&&e1.message)){_keyFlashQuotaUntil[si]=Date.now()+60000;_saveQuotaUntil();allPrimaryQuota=true;continue}
-        if(isModelErr(e1&&e1.message))continue;
-        throw e1;
+        // quota 錯誤：標記此 key 冷卻 60 秒，繼續換下一把
+        if(isQuotaErr(e1&&e1.message)){
+          _keyFlashQuotaUntil[si]=Date.now()+60000;_saveQuotaUntil();
+        }
+        // 任何錯誤（quota、model unavailable、auth、網路…）都繼續換下一把 key
+        continue;
       }
     }
+    // --- Phase 2: 所有 key 的 primary 都失敗 → 改用 fallback 模型 ---
     for(var sj=0;sj<MAX_GEMINI_KEYS;sj++){
       var keyFb=slots[sj];
       if(!keyFb)continue;
@@ -329,14 +335,14 @@ async function callAI(parts,schema){
         return await requestWithKey(GEMINI_URL_FALLBACK,keyFb,"gemini-2.5-flash");
       }catch(e2){
         lastErr=e2;
-        if(isQuotaErr(e2&&e2.message))continue;
-        if(isModelErr(e2&&e2.message))continue;
-        throw e2;
+        // 不管什麼錯誤都繼續換下一把 key
+        continue;
       }
     }
+    // 全部失敗
     if(lastErr)throw lastErr;
-    if(allPrimaryQuota)throw new Error("Gemini 3 Flash 與 Gemini 2.5 Flash 目前皆達到限額，請稍後再試或更換 API Key");
-    throw new Error("目前無可用的 Gemini API Key，請到設定更新 Key");
+    if(!anyPrimaryAttempted)throw new Error("目前無可用的 Gemini API Key，請到設定更新 Key");
+    throw new Error("Gemini 3 Flash 與 Gemini 2.5 Flash 目前皆達到限額，請稍後再試或更換 API Key");
   };
   try{
     return await runOnce();
