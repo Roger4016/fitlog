@@ -659,91 +659,92 @@ h("div",{style:{fontSize:10,color:"var(--text-ter)",textAlign:"right",marginTop:
 h("button",{onClick:doAdd,disabled:!has,style:A({},S.btn(!has?"var(--border-light)":"var(--teal)"),{width:"100%",minHeight:52,borderRadius:"var(--radius)",fontSize:16,fontWeight:700,opacity:!has?.5:1,boxShadow:has?"0 4px 16px rgba(42,125,110,0.25)":"none"})},"✓ 確認新增")))
 }
 
-function BodyMetricsLineChart(p){
-var canvasRef=useRef(null),chartRef=useRef(null);
+function DashboardChart(p){
+var canvasRef=useRef(null),chartRef=useRef(null),msgRef=useRef(null);
 useEffect(function(){
-if(!canvasRef.current||!window.Chart)return;
-if(chartRef.current){chartRef.current.destroy();chartRef.current=null}
-var data=p.data||[];if(data.length===0)return;
-var labels=data.map(function(d){var pts=d.date.split("-");return parseInt(pts[1],10)+"/"+parseInt(pts[2],10)});
+var canvas=canvasRef.current,msg=msgRef.current;
+if(!canvas)return;
+var show=function(txt){canvas.style.display="none";if(msg)msg.textContent=txt};
+var clear=function(){if(msg)msg.textContent="";canvas.style.display="block"};
+if(chartRef.current){try{chartRef.current.destroy()}catch(e){}chartRef.current=null}
+if(!window.Chart){show("圖表元件未載入，請重整或檢查網路");return}
+var dates=p.dates||[],allDays=p.allDays||{},goals=p.goals||{};
+if(!dates.length){show("此期間無資料");return}
+var goal=goals.calories||0;
+var labels=dates.map(function(d){var pts=d.split("-");return parseInt(pts[1],10)+"/"+parseInt(pts[2],10)});
+var netCals=dates.map(function(d){var day=allDays[d];if(!day)return null;var food=day.food||[],ex=day.exercise||[];if(!food.length&&!ex.length)return null;return food.reduce(function(s,f){return s+calcCal(f.protein,f.fat,f.carbs)},0)-ex.reduce(function(s,e){return s+(e.calories||0)},0)});
+var weightData=dates.map(function(d){var m=allDays[d]&&allDays[d].metrics;return m&&m.weight>0?m.weight:null});
+var fatData=dates.map(function(d){var m=allDays[d]&&allDays[d].metrics;return m&&m.bodyFat>0?m.bodyFat:null});
+var hasCal=netCals.some(function(v){return v!=null}),hasW=weightData.some(function(v){return v!=null}),hasF=fatData.some(function(v){return v!=null});
+if(!hasCal&&!hasW&&!hasF){show("此期間無資料可顯示");return}
 var datasets=[];
-var hasW=data.some(function(d){return d.weight!=null&&d.weight>0});
-var hasF=data.some(function(d){return d.bodyFat!=null&&d.bodyFat>0});
-if(hasW)datasets.push({label:"體重 kg",data:data.map(function(d){return d.weight||null}),borderColor:"#3565a0",backgroundColor:"rgba(53,101,160,0.08)",yAxisID:"y",tension:0.3,pointRadius:4,pointHoverRadius:6,spanGaps:true,borderWidth:2,fill:false});
-if(hasF)datasets.push({label:"體脂 %",data:data.map(function(d){return d.bodyFat||null}),borderColor:"#2a7d6e",backgroundColor:"rgba(42,125,110,0.08)",yAxisID:"y1",tension:0.3,pointRadius:4,pointHoverRadius:6,spanGaps:true,borderWidth:2,fill:false});
-if(datasets.length===0)return;
-var scales={x:{ticks:{font:{size:11},color:"#8a7e6f",maxRotation:0,maxTicksLimit:7},grid:{color:"rgba(44,37,24,0.04)"}},y:{position:"left",title:{display:true,text:"kg",font:{size:10},color:"#3565a0"},ticks:{font:{size:10},color:"#3565a0"},grid:{color:"rgba(44,37,24,0.06)"}}};
-if(hasF)scales.y1={position:"right",title:{display:true,text:"%",font:{size:10},color:"#2a7d6e"},ticks:{font:{size:10},color:"#2a7d6e"},grid:{drawOnChartArea:false}};
-chartRef.current=new Chart(canvasRef.current,{type:"line",data:{labels:labels,datasets:datasets},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,position:"bottom",labels:{font:{size:11},color:"#2c2518",padding:10,boxWidth:12,boxHeight:2}},tooltip:{callbacks:{title:function(items){return data[items[0].dataIndex]?data[items[0].dataIndex].date:""}}}},scales:scales,interaction:{intersect:false,mode:"index"}}});
-return function(){if(chartRef.current){chartRef.current.destroy();chartRef.current=null}};
-},[p.data]);
-if(!window.Chart)return null;
-return h("div",{style:{position:"relative",height:200}},h("canvas",{ref:canvasRef}));
-}
-
-function CaloriesBarChart(p){
-var canvasRef=useRef(null),chartRef=useRef(null);
-useEffect(function(){
-if(!canvasRef.current||!window.Chart)return;
-if(chartRef.current){chartRef.current.destroy();chartRef.current=null}
-var data=p.data||[];if(data.length===0)return;
-var goal=p.goalCalories||0;
-var labels=data.map(function(d){var pts=d.date.split("-");return parseInt(pts[1],10)+"/"+parseInt(pts[2],10)});
-var barBg=data.map(function(d){return d.net>goal?"rgba(197,48,48,0.65)":"rgba(42,125,110,0.65)"});
-var barBorder=data.map(function(d){return d.net>goal?"#c53030":"#2a7d6e"});
-var datasets=[{label:"淨熱量",data:data.map(function(d){return d.net>0?d.net:0}),backgroundColor:barBg,borderColor:barBorder,borderWidth:1,borderRadius:3,order:1}];
-if(goal>0)datasets.push({label:"目標 "+goal+" kcal",data:data.map(function(){return goal}),type:"line",borderColor:"rgba(196,93,44,0.7)",backgroundColor:"transparent",borderDash:[5,4],borderWidth:1.5,pointRadius:0,order:0});
-chartRef.current=new Chart(canvasRef.current,{type:"bar",data:{labels:labels,datasets:datasets},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,position:"bottom",labels:{font:{size:11},color:"#2c2518",padding:10,boxWidth:12,boxHeight:2}},tooltip:{callbacks:{title:function(items){return data[items[0].dataIndex]?data[items[0].dataIndex].date:""},label:function(item){if(String(item.dataset.label).indexOf("目標")>-1)return"目標: "+goal+" kcal";return"淨熱量: "+(item.raw||0)+" kcal"}}}},scales:{x:{ticks:{font:{size:11},color:"#8a7e6f",maxRotation:0,maxTicksLimit:8},grid:{color:"rgba(44,37,24,0.04)"}},y:{ticks:{font:{size:10},color:"#8a7e6f"},grid:{color:"rgba(44,37,24,0.06)"}}},interaction:{intersect:false,mode:"index"}}});
-return function(){if(chartRef.current){chartRef.current.destroy();chartRef.current=null}};
-},[p.data,p.goalCalories]);
-if(!window.Chart)return null;
-return h("div",{style:{position:"relative",height:200}},h("canvas",{ref:canvasRef}));
+if(hasCal)datasets.push({type:"bar",label:"淨熱量 kcal",data:netCals,backgroundColor:netCals.map(function(v){return v!=null&&goal>0&&v>goal?"rgba(197,48,48,0.6)":"rgba(42,125,110,0.6)"}),borderColor:netCals.map(function(v){return v!=null&&goal>0&&v>goal?"#c53030":"#2a7d6e"}),borderWidth:1,borderRadius:3,yAxisID:"y",order:2});
+if(hasCal&&goal>0)datasets.push({type:"line",label:"目標 "+goal+" kcal",data:dates.map(function(){return goal}),borderColor:"rgba(196,93,44,0.7)",backgroundColor:"transparent",borderDash:[5,4],borderWidth:1.5,pointRadius:0,yAxisID:"y",order:0});
+if(hasW)datasets.push({type:"line",label:"體重 kg",data:weightData,borderColor:"#3565a0",backgroundColor:"rgba(53,101,160,0.08)",yAxisID:hasCal?"y1":"y",tension:0.3,pointRadius:4,pointHoverRadius:6,spanGaps:true,borderWidth:2,order:1});
+if(hasF)datasets.push({type:"line",label:"體脂 %",data:fatData,borderColor:"#7b4f8a",backgroundColor:"rgba(123,79,138,0.08)",yAxisID:hasCal&&hasW?"y2":hasCal?"y1":"y",tension:0.3,pointRadius:4,pointHoverRadius:6,spanGaps:true,borderWidth:2,order:1});
+var nd={drawOnChartArea:false};
+var scales={x:{ticks:{font:{size:11},color:"#8a7e6f",maxRotation:0,maxTicksLimit:8},grid:{color:"rgba(44,37,24,0.04)"}}};
+if(hasCal){scales.y={position:"left",ticks:{font:{size:10},color:"#8a7e6f"},grid:{color:"rgba(44,37,24,0.06)"},title:{display:true,text:"kcal",font:{size:10},color:"#8a7e6f"}}}
+else{scales.y={position:"left",ticks:{font:{size:10},color:"#8a7e6f"},grid:{color:"rgba(44,37,24,0.06)"},title:{display:true,text:hasW?"kg":"%",font:{size:10},color:"#8a7e6f"}}}
+if(hasCal&&hasW){scales.y1={position:"right",ticks:{font:{size:10},color:"#3565a0"},grid:nd,title:{display:true,text:"kg",font:{size:10},color:"#3565a0"}}}
+if(hasCal&&hasF&&hasW){scales.y2={position:"right",ticks:{font:{size:10},color:"#7b4f8a"},grid:nd,title:{display:true,text:"%",font:{size:10},color:"#7b4f8a"},offset:true}}
+else if(hasCal&&hasF&&!hasW){scales.y1={position:"right",ticks:{font:{size:10},color:"#7b4f8a"},grid:nd,title:{display:true,text:"%",font:{size:10},color:"#7b4f8a"}}}
+clear();
+try{chartRef.current=new window.Chart(canvas,{type:"bar",data:{labels:labels,datasets:datasets},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,position:"bottom",labels:{font:{size:11},color:"#2c2518",padding:8,boxWidth:12,boxHeight:2}},tooltip:{callbacks:{title:function(items){return dates[items[0].dataIndex]||""},label:function(item){return item.dataset.label+": "+(item.raw!=null?item.raw:"—")}}}},scales:scales,interaction:{intersect:false,mode:"index"}}})}
+catch(e){show("圖表初始化失敗："+((e&&e.message)||String(e)));return}
+return function(){if(chartRef.current){try{chartRef.current.destroy()}catch(e){}chartRef.current=null}};
+},[p.dates,p.allDays,p.goals]);
+return h("div",{style:{position:"relative",height:280}},
+h("div",{ref:msgRef,style:{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,color:"var(--text-ter)",padding:"0 16px",textAlign:"center",pointerEvents:"none"}}),
+h("canvas",{ref:canvasRef}));
 }
 
 function DashboardTab(p){
 var _range=useState(30),range=_range[0],setRange=_range[1];
 var allDays=p.allDays,goals=p.goals,today=todayStr(),cutoff=addDays(today,-range+1);
 var allDatesInRange=[];var cur=cutoff;while(cur<=today){allDatesInRange.push(cur);cur=addDays(cur,1);}
-var metricsData=allDatesInRange.filter(function(d){return allDays[d]&&allDays[d].metrics}).map(function(d){var m=allDays[d].metrics;return{date:d,weight:m.weight||null,bodyFat:m.bodyFat||null}});
-var calData=allDatesInRange.filter(function(d){return allDays[d]&&((allDays[d].food&&allDays[d].food.length>0)||(allDays[d].exercise&&allDays[d].exercise.length>0))}).map(function(d){var day=allDays[d],food=day.food||[],ex=day.exercise||[];var intake=food.reduce(function(s,f){return s+calcCal(f.protein,f.fat,f.carbs)},0);var burned=ex.reduce(function(s,e){return s+(e.calories||0)},0);return{date:d,net:intake-burned}});
+var goal=goals.calories||0;
 var pillBtn=function(active){return{flex:1,padding:"8px 0",border:"none",fontSize:12,fontWeight:600,borderRadius:"var(--radius-xs)",cursor:"pointer",background:active?"var(--accent)":"var(--card-alt)",color:active?"#fff":"var(--text-sec)",transition:"all .2s",WebkitTapHighlightColor:"transparent"}};
 return h("div",{style:{padding:"0 16px 16px"}},
 h("div",{style:{display:"flex",gap:4,marginBottom:14}},[7,30,90].map(function(r){return h("button",{key:r,onClick:function(){setRange(r)},style:pillBtn(range===r)},r+"天")})),
-h("div",{className:"fade-up",style:A({},S.card,{marginBottom:12})},
-h("div",{style:{fontSize:14,fontWeight:700,color:"var(--text)",marginBottom:metricsData.length>=2?12:8}},"體重 & 體脂率"),
-metricsData.length>=2
-?h(BodyMetricsLineChart,{data:metricsData})
-:h("div",{style:{paddingBottom:4,fontSize:13,color:"var(--text-ter)",textAlign:"center"}},metricsData.length===1?"再記錄一次體態即可顯示趨勢":"此期間無體態紀錄")),
-h("div",{className:"fade-up",style:A({},S.card,{marginBottom:0})},
-h("div",{style:{fontSize:14,fontWeight:700,color:"var(--text)",marginBottom:calData.length>0?12:8}},"淨熱量 vs 目標"),
-calData.length>0
-?h(CaloriesBarChart,{data:calData,goalCalories:goals.calories})
-:h("div",{style:{paddingBottom:4,fontSize:13,color:"var(--text-ter)",textAlign:"center"}},"此期間無飲食或運動紀錄")));}
+h("div",{className:"fade-up",style:A({},S.card,{padding:"16px 16px 12px"})},
+h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}},
+h("span",{style:{fontSize:14,fontWeight:700,color:"var(--text)"}},"趨勢圖表"),
+h("div",{style:{display:"flex",gap:10,fontSize:11,color:"var(--text-ter)",flexWrap:"wrap"}},
+h("span",null,"🟩 淨熱量"),goal>0&&h("span",null,"- - 目標"),
+h("span",null,"— 體重"),h("span",null,"— 體脂"))),
+h(DashboardChart,{dates:allDatesInRange,allDays:allDays,goals:goals})));}
 
 function MetricsChart(p){
-var canvasRef=useRef(null),chartRef=useRef(null);
+var canvasRef=useRef(null),chartRef=useRef(null),msgRef=useRef(null);
 useEffect(function(){
-if(!canvasRef.current||!window.Chart)return;
-if(chartRef.current){chartRef.current.destroy();chartRef.current=null}
+var canvas=canvasRef.current,msg=msgRef.current;
+if(!canvas)return;
+var show=function(txt){canvas.style.display="none";if(msg)msg.textContent=txt};
+var clear=function(){if(msg)msg.textContent="";canvas.style.display="block"};
+if(chartRef.current){try{chartRef.current.destroy()}catch(e){}chartRef.current=null}
+if(!window.Chart){show("圖表元件未載入，請重整或檢查網路");return}
 var data=p.data||[];
-if(data.length===0)return;
-var labels=data.map(function(d){var parts=d.date.split("-");return (parseInt(parts[1],10))+"/"+(parseInt(parts[2],10))});
-var datasets=[];
+if(!data.length){show("尚無資料可顯示");return}
+var labels=data.map(function(d){var pts=d.date.split("-");return parseInt(pts[1],10)+"/"+parseInt(pts[2],10)});
 var hasWeight=data.some(function(d){return d.weight!=null&&d.weight>0});
 var hasFat=data.some(function(d){return d.bodyFat!=null&&d.bodyFat>0});
 var hasMuscle=data.some(function(d){return d.muscle!=null&&d.muscle>0});
+var datasets=[];
 if(hasWeight)datasets.push({label:"體重 kg",data:data.map(function(d){return d.weight||null}),borderColor:"#3565a0",backgroundColor:"rgba(53,101,160,0.08)",yAxisID:"y",tension:0.3,pointRadius:4,pointHoverRadius:6,spanGaps:true,borderWidth:2});
 if(hasFat)datasets.push({label:"體脂 %",data:data.map(function(d){return d.bodyFat||null}),borderColor:"#2a7d6e",backgroundColor:"rgba(42,125,110,0.08)",yAxisID:"y1",tension:0.3,pointRadius:4,pointHoverRadius:6,spanGaps:true,borderWidth:2});
 if(hasMuscle)datasets.push({label:"肌肉 kg",data:data.map(function(d){return d.muscle||null}),borderColor:"#7b4f8a",backgroundColor:"rgba(123,79,138,0.08)",yAxisID:"y",tension:0.3,pointRadius:4,pointHoverRadius:6,spanGaps:true,borderWidth:2});
-if(datasets.length===0)return;
+if(!datasets.length){show("尚無資料可顯示");return}
 var scales={x:{ticks:{font:{size:11},color:"#8a7e6f",maxRotation:0},grid:{color:"rgba(44,37,24,0.04)"}},y:{position:"left",title:{display:hasMuscle||hasWeight,text:"kg",font:{size:10},color:"#8a7e6f"},ticks:{font:{size:10},color:"#8a7e6f"},grid:{color:"rgba(44,37,24,0.06)"}}};
-if(hasFat)scales.y1={position:"right",title:{display:true,text:"%",font:{size:10},color:"#8a7e6f"},ticks:{font:{size:10},color:"#8a7e6f"},grid:{drawOnChartArea:false}};
-chartRef.current=new Chart(canvasRef.current,{type:"line",data:{labels:labels,datasets:datasets},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,position:"bottom",labels:{font:{size:11},color:"#2c2518",padding:12,boxWidth:12,boxHeight:2}},tooltip:{callbacks:{title:function(items){return data[items[0].dataIndex]?data[items[0].dataIndex].date:""}}}},scales:scales,interaction:{intersect:false,mode:"index"}}});
-return function(){if(chartRef.current){chartRef.current.destroy();chartRef.current=null}};
+if(hasFat)scales.y1={position:"right",title:{display:true,text:"%",font:{size:10},color:"#2a7d6e"},ticks:{font:{size:10},color:"#2a7d6e"},grid:{drawOnChartArea:false}};
+clear();
+try{chartRef.current=new window.Chart(canvas,{type:"line",data:{labels:labels,datasets:datasets},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,position:"bottom",labels:{font:{size:11},color:"#2c2518",padding:12,boxWidth:12,boxHeight:2}},tooltip:{callbacks:{title:function(items){return data[items[0].dataIndex]?data[items[0].dataIndex].date:""}}}},scales:scales,interaction:{intersect:false,mode:"index"}}})}
+catch(e){show("圖表初始化失敗："+((e&&e.message)||""));return}
+return function(){if(chartRef.current){try{chartRef.current.destroy()}catch(e){}chartRef.current=null}};
 },[p.data]);
-if(!window.Chart)return h("div",{style:{padding:"12px 0",fontSize:12,color:"var(--text-ter)",textAlign:"center"}},"圖表載入失敗，請檢查網路");
-if(!p.data||p.data.length===0)return h("div",{style:{padding:"24px 0",fontSize:13,color:"var(--text-ter)",textAlign:"center"}},"尚無資料可顯示");
-return h("div",{style:{position:"relative",height:220}},h("canvas",{ref:canvasRef}));
+return h("div",{style:{position:"relative",height:220}},
+h("div",{ref:msgRef,style:{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,color:"var(--text-ter)",padding:"0 8px",textAlign:"center",pointerEvents:"none"}}),
+h("canvas",{ref:canvasRef}));
 }
 
 function MetricsTab(p){
