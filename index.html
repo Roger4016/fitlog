@@ -673,24 +673,25 @@ if(!dates.length){show("此期間無資料");return}
 var goal=goals.calories||0;
 var labels=dates.map(function(d){var pts=d.split("-");return parseInt(pts[1],10)+"/"+parseInt(pts[2],10)});
 var netCals=dates.map(function(d){var day=allDays[d];if(!day)return null;var food=day.food||[],ex=day.exercise||[];if(!food.length&&!ex.length)return null;return food.reduce(function(s,f){return s+calcCal(f.protein,f.fat,f.carbs)},0)-ex.reduce(function(s,e){return s+(e.calories||0)},0)});
+var calBars=goal>0?netCals.map(function(v){return v!=null?v-goal:null}):netCals;
 var weightData=dates.map(function(d){var m=allDays[d]&&allDays[d].metrics;return m&&m.weight>0?m.weight:null});
 var fatData=dates.map(function(d){var m=allDays[d]&&allDays[d].metrics;return m&&m.bodyFat>0?m.bodyFat:null});
-var hasCal=netCals.some(function(v){return v!=null}),hasW=weightData.some(function(v){return v!=null}),hasF=fatData.some(function(v){return v!=null});
+var hasCal=calBars.some(function(v){return v!=null}),hasW=weightData.some(function(v){return v!=null}),hasF=fatData.some(function(v){return v!=null});
 if(!hasCal&&!hasW&&!hasF){show("此期間無資料可顯示");return}
 var datasets=[];
-if(hasCal)datasets.push({type:"bar",label:"淨熱量 kcal",data:netCals,backgroundColor:netCals.map(function(v){return v!=null&&goal>0&&v>goal?"rgba(197,48,48,0.6)":"rgba(42,125,110,0.6)"}),borderColor:netCals.map(function(v){return v!=null&&goal>0&&v>goal?"#c53030":"#2a7d6e"}),borderWidth:1,borderRadius:3,yAxisID:"y",order:2});
-if(hasCal&&goal>0)datasets.push({type:"line",label:"目標 "+goal+" kcal",data:dates.map(function(){return goal}),borderColor:"rgba(196,93,44,0.7)",backgroundColor:"transparent",borderDash:[5,4],borderWidth:1.5,pointRadius:0,yAxisID:"y",order:0});
+var calLabel=goal>0?"熱量偏差 kcal":"淨熱量 kcal";
+if(hasCal)datasets.push({type:"bar",label:calLabel,data:calBars,backgroundColor:calBars.map(function(v){return v!=null&&v>0?"rgba(197,48,48,0.6)":"rgba(42,125,110,0.6)"}),borderColor:calBars.map(function(v){return v!=null&&v>0?"#c53030":"#2a7d6e"}),borderWidth:1,borderRadius:3,yAxisID:"y",order:2});
 if(hasW)datasets.push({type:"line",label:"體重 kg",data:weightData,borderColor:"#3565a0",backgroundColor:"rgba(53,101,160,0.08)",yAxisID:hasCal?"y1":"y",tension:0.3,pointRadius:4,pointHoverRadius:6,spanGaps:true,borderWidth:2,order:1});
 if(hasF)datasets.push({type:"line",label:"體脂 %",data:fatData,borderColor:"#7b4f8a",backgroundColor:"rgba(123,79,138,0.08)",yAxisID:hasCal&&hasW?"y2":hasCal?"y1":"y",tension:0.3,pointRadius:4,pointHoverRadius:6,spanGaps:true,borderWidth:2,order:1});
 var nd={drawOnChartArea:false};
 var scales={x:{ticks:{font:{size:11},color:"#8a7e6f",maxRotation:0,maxTicksLimit:8},grid:{color:"rgba(44,37,24,0.04)"}}};
-if(hasCal){scales.y={position:"left",ticks:{font:{size:10},color:"#8a7e6f"},grid:{color:"rgba(44,37,24,0.06)"},title:{display:true,text:"kcal",font:{size:10},color:"#8a7e6f"}}}
+if(hasCal){scales.y={position:"left",ticks:{font:{size:10},color:"#8a7e6f"},grid:{color:function(ctx){return ctx.tick.value===0?"rgba(44,37,24,0.3)":"rgba(44,37,24,0.06)"},lineWidth:function(ctx){return ctx.tick.value===0?1.5:1}},title:{display:true,text:goal>0?"vs 目標 kcal":"kcal",font:{size:10},color:"#8a7e6f"}}}
 else{scales.y={position:"left",ticks:{font:{size:10},color:"#8a7e6f"},grid:{color:"rgba(44,37,24,0.06)"},title:{display:true,text:hasW?"kg":"%",font:{size:10},color:"#8a7e6f"}}}
 if(hasCal&&hasW){scales.y1={position:"right",ticks:{font:{size:10},color:"#3565a0"},grid:nd,title:{display:true,text:"kg",font:{size:10},color:"#3565a0"}}}
 if(hasCal&&hasF&&hasW){scales.y2={position:"right",ticks:{font:{size:10},color:"#7b4f8a"},grid:nd,title:{display:true,text:"%",font:{size:10},color:"#7b4f8a"},offset:true}}
 else if(hasCal&&hasF&&!hasW){scales.y1={position:"right",ticks:{font:{size:10},color:"#7b4f8a"},grid:nd,title:{display:true,text:"%",font:{size:10},color:"#7b4f8a"}}}
 clear();
-try{chartRef.current=new window.Chart(canvas,{type:"bar",data:{labels:labels,datasets:datasets},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,position:"bottom",labels:{font:{size:11},color:"#2c2518",padding:8,boxWidth:12,boxHeight:2}},tooltip:{callbacks:{title:function(items){return dates[items[0].dataIndex]||""},label:function(item){return item.dataset.label+": "+(item.raw!=null?item.raw:"—")}}}},scales:scales,interaction:{intersect:false,mode:"index"}}})}
+try{chartRef.current=new window.Chart(canvas,{type:"bar",data:{labels:labels,datasets:datasets},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,position:"bottom",labels:{font:{size:11},color:"#2c2518",padding:8,boxWidth:12,boxHeight:2}},tooltip:{callbacks:{title:function(items){return dates[items[0].dataIndex]||""},label:function(item){var v=item.raw;if(v==null)return item.dataset.label+": —";var prefix=goal>0&&item.datasetIndex===0?(v>0?"+":""):""  ;return item.dataset.label+": "+prefix+v}}}},scales:scales,interaction:{intersect:false,mode:"index"}}})}
 catch(e){show("圖表初始化失敗："+((e&&e.message)||String(e)));return}
 return function(){if(chartRef.current){try{chartRef.current.destroy()}catch(e){}chartRef.current=null}};
 },[p.dates,p.allDays,p.goals]);
@@ -711,7 +712,7 @@ h("div",{className:"fade-up",style:A({},S.card,{padding:"16px 16px 12px"})},
 h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}},
 h("span",{style:{fontSize:14,fontWeight:700,color:"var(--text)"}},"趨勢圖表"),
 h("div",{style:{display:"flex",gap:10,fontSize:11,color:"var(--text-ter)",flexWrap:"wrap"}},
-h("span",null,"🟩 淨熱量"),goal>0&&h("span",null,"- - 目標"),
+goal>0?h("span",null,"🟥正/🟩負 vs 目標"):h("span",null,"🟩 淨熱量"),
 h("span",null,"— 體重"),h("span",null,"— 體脂"))),
 h(DashboardChart,{dates:allDatesInRange,allDays:allDays,goals:goals})));}
 
