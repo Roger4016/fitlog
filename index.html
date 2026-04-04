@@ -257,13 +257,35 @@ async function callAI(parts,schema){
     var s=String(msg||"");
     return /resource_exhausted|rate\s*limit|quota|429|too\s*many\s*requests/i.test(s);
   };
+  var isModelErr=function(msg){
+    var s=String(msg||"");
+    return /503|unavailable|model.*not.*found|overloaded|service\s*unavailable/i.test(s);
+  };
+  var isRetryableNetErr=function(e){
+    if(!e)return false;
+    if(e.name==="AbortError")return true;
+    var m=String(e.message||"");
+    if(/請求逾時/.test(m))return true;
+    if(/failed to fetch/i.test(m))return true;
+    if(/networkerror/i.test(m))return true;
+    if(/load failed/i.test(m))return true;
+    return false;
+  };
+  var sleepMs=function(ms){return new Promise(function(r){setTimeout(r,ms)})};
   var requestWithKey=async function(url,key,modelName){
+    _geminiActiveModel=modelName;
+    var gc={temperature:0.1,maxOutputTokens:4096,responseMimeType:"application/json"};
+    if(schema)gc.responseJsonSchema=schema;
+    var controller=new AbortController();
+    var timer=setTimeout(function(){controller.abort();},30000);
     try{
-      _geminiActiveModel=modelName;
-      var gc={temperature:0.1,maxOutputTokens:4096,responseMimeType:"application/json"};
-      if(schema)gc.responseJsonSchema=schema;
-      var res=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json","x-goog-api-key":key},body:JSON.stringify({contents:[{parts:parts}],generationConfig:gc})});
-      var data=await res.json();
+      var res=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json","x-goog-api-key":key},body:JSON.stringify({contents:[{parts:parts}],generationConfig:gc}),signal:controller.signal});
+      clearTimeout(timer);timer=null;
+      var data=await res.json().catch(function(){return{}});
+      if(!res.ok){
+        var em=(data.error&&data.error.message)||("HTTP "+res.status);
+        throw new Error(formatGeminiApiError(em));
+      }
       if(data.error)throw new Error(formatGeminiApiError(data.error.message));
       if(data.promptFeedback&&data.promptFeedback.blockReason)throw new Error("請求被安全政策攔截，請換描述或改用手動輸入");
       var c=data.candidates&&data.candidates[0];
@@ -274,40 +296,55 @@ async function callAI(parts,schema){
       if(!txt)throw new Error("模型未回傳文字（可能被過濾）");
       return txt;
     }catch(e){
+      if(timer)clearTimeout(timer);
+      if(e&&e.name==="AbortError")throw new Error("請求逾時（30秒），請確認網路後重試");
       throw e;
     }
   };
-  while(_keyFlashQuotaUntil.length<MAX_GEMINI_KEYS)_keyFlashQuotaUntil.push(0);
-  var lastErr=null,allPrimaryQuota=true,now=Date.now();
-  for(var si=0;si<MAX_GEMINI_KEYS;si++){
-    var keySlot=slots[si];
-    if(!keySlot)continue;
-    if(now<(_keyFlashQuotaUntil[si]||0))continue;
-    allPrimaryQuota=false;
-    try{
-      var txtPrimary=await requestWithKey(GEMINI_URL_PRIMARY,keySlot,"gemini-3-flash-preview");
-      _keyFlashQuotaUntil[si]=0;_saveQuotaUntil();
-      return txtPrimary;
-    }catch(e1){
-      lastErr=e1;
-      if(isQuotaErr(e1&&e1.message)){_keyFlashQuotaUntil[si]=Date.now()+60000;_saveQuotaUntil();allPrimaryQuota=true;continue}
-      throw e1;
+  var runOnce=async function(){
+    while(_keyFlashQuotaUntil.length<MAX_GEMINI_KEYS)_keyFlashQuotaUntil.push(0);
+    var lastErr=null,allPrimaryQuota=true,now=Date.now();
+    for(var si=0;si<MAX_GEMINI_KEYS;si++){
+      var keySlot=slots[si];
+      if(!keySlot)continue;
+      if(now<(_keyFlashQuotaUntil[si]||0))continue;
+      allPrimaryQuota=false;
+      try{
+        var txtPrimary=await requestWithKey(GEMINI_URL_PRIMARY,keySlot,"gemini-3-flash-preview");
+        _keyFlashQuotaUntil[si]=0;_saveQuotaUntil();
+        return txtPrimary;
+      }catch(e1){
+        lastErr=e1;
+        if(isQuotaErr(e1&&e1.message)){_keyFlashQuotaUntil[si]=Date.now()+60000;_saveQuotaUntil();allPrimaryQuota=true;continue}
+        if(isModelErr(e1&&e1.message))continue;
+        throw e1;
+      }
     }
-  }
-  for(var sj=0;sj<MAX_GEMINI_KEYS;sj++){
-    var keyFb=slots[sj];
-    if(!keyFb)continue;
-    try{
-      return await requestWithKey(GEMINI_URL_FALLBACK,keyFb,"gemini-2.5-flash");
-    }catch(e2){
-      lastErr=e2;
-      if(isQuotaErr(e2&&e2.message))continue;
-      throw e2;
+    for(var sj=0;sj<MAX_GEMINI_KEYS;sj++){
+      var keyFb=slots[sj];
+      if(!keyFb)continue;
+      try{
+        return await requestWithKey(GEMINI_URL_FALLBACK,keyFb,"gemini-2.5-flash");
+      }catch(e2){
+        lastErr=e2;
+        if(isQuotaErr(e2&&e2.message))continue;
+        if(isModelErr(e2&&e2.message))continue;
+        throw e2;
+      }
     }
+    if(lastErr)throw lastErr;
+    if(allPrimaryQuota)throw new Error("Gemini 3 Flash 與 Gemini 2.5 Flash 目前皆達到限額，請稍後再試或更換 API Key");
+    throw new Error("目前無可用的 Gemini API Key，請到設定更新 Key");
+  };
+  try{
+    return await runOnce();
+  }catch(e0){
+    if(isRetryableNetErr(e0)){
+      await sleepMs(1500);
+      return await runOnce();
+    }
+    throw e0;
   }
-  if(lastErr)throw lastErr;
-  if(allPrimaryQuota)throw new Error("Gemini 3 Flash 與 Gemini 2.5 Flash 目前皆達到限額，請稍後再試或更換 API Key");
-  throw new Error("目前無可用的 Gemini API Key，請到設定更新 Key");
 }
 function parseJSON(t){t=String(t).trim();var fb=t.match(/```(?:json)?\s*([\s\S]*?)```/i);if(fb)t=fb[1].trim();
   function extractJSONObject(s){
