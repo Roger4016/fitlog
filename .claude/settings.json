@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node -e ':*)",
+      "Bash(node --check /tmp/check_script.js)",
+      "Bash(node --check check_script_temp.js)",
+      "Bash(rm check_script_temp.js)"
+    ]
+  }
+}
