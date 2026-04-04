@@ -28,6 +28,7 @@
 </head>
 <body>
 <div id="root"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.7/chart.umd.min.js" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/idb-keyval@6/dist/umd.js"></script>
 <script src="https://accounts.google.com/gsi/client"></script>
 <script>
@@ -201,7 +202,8 @@ function clampImportNumber(n,min,max){var x=typeof n==="number"&&!isNaN(n)?n:par
 function truncateImportString(s,maxLen){var t=s==null?"":String(s);return t.length>maxLen?t.slice(0,maxLen):t}
 function sanitizeFoodImportRow(raw,st){var descRaw=raw&&raw.desc!=null?String(raw.desc):"食物";var desc=truncateImportString(descRaw,FL_DESC_MAX_LEN);if(st&&descRaw.length>FL_DESC_MAX_LEN)st.truncStrings=(st.truncStrings||0)+1;var sumRaw=raw&&raw.aiSummary!=null?String(raw.aiSummary):"";var aiSummary=truncateImportString(sumRaw,FL_AI_SUMMARY_MAX_LEN);if(st&&sumRaw.length>FL_AI_SUMMARY_MAX_LEN)st.truncStrings=(st.truncStrings||0)+1;var id=(raw&&raw.id!=null&&String(raw.id).length<=80)?String(raw.id):uid();var time=truncateImportString(raw&&raw.time!=null?raw.time:"",FL_TIME_MAX_LEN);var row={id:id,desc:desc,time:time,protein:clampImportNumber(raw&&raw.protein,0,FL_IMPORT_NUM_MAX),fat:clampImportNumber(raw&&raw.fat,0,FL_IMPORT_NUM_MAX),carbs:clampImportNumber(raw&&raw.carbs,0,FL_IMPORT_NUM_MAX)};if(aiSummary)row.aiSummary=aiSummary;return row}
 function sanitizeExerciseImportRow(raw,st){var descRaw=raw&&raw.desc!=null?String(raw.desc):"運動";var desc=truncateImportString(descRaw,FL_DESC_MAX_LEN);if(st&&descRaw.length>FL_DESC_MAX_LEN)st.truncStrings=(st.truncStrings||0)+1;var sumRaw=raw&&raw.aiSummary!=null?String(raw.aiSummary):"";var aiSummary=truncateImportString(sumRaw,FL_AI_SUMMARY_MAX_LEN);if(st&&sumRaw.length>FL_AI_SUMMARY_MAX_LEN)st.truncStrings=(st.truncStrings||0)+1;var id=(raw&&raw.id!=null&&String(raw.id).length<=80)?String(raw.id):uid();var time=truncateImportString(raw&&raw.time!=null?raw.time:"",FL_TIME_MAX_LEN);var row={id:id,desc:desc,time:time,calories:clampImportNumber(raw&&raw.calories,0,FL_IMPORT_NUM_MAX),duration:clampImportNumber(raw&&raw.duration,0,14400)};if(aiSummary)row.aiSummary=aiSummary;return row}
-function sanitizeImportedAllDays(allDays){var stats={datesUsed:0,badDateKeys:0,foodIn:0,exIn:0,skippedRows:0,capDates:false,cappedTotal:false,truncStrings:0};var imp={};if(!allDays||typeof allDays!=="object"||Array.isArray(allDays))return{imp:imp,stats:stats};var rawKeys=Object.keys(allDays),i,u;for(u=0;u<rawKeys.length;u++){var rk=rawKeys[u];if(isBlockedImportKey(rk))continue;if(!isValidImportDateKey(rk))stats.badDateKeys++}var keys=rawKeys.filter(function(k){return !isBlockedImportKey(k)&&isValidImportDateKey(k)}).sort();if(keys.length>FL_IMPORT_MAX_DATES){stats.capDates=true;keys=keys.slice(0,FL_IMPORT_MAX_DATES)}var total=0;outer:for(i=0;i<keys.length;i++){var dt=keys[i];var day=allDays[dt]||{};var fa=Array.isArray(day.food)?day.food:[];var ea=Array.isArray(day.exercise)?day.exercise:[];var fOut=[],eOut=[],j,stDay={truncStrings:0};for(j=0;j<fa.length;j++){if(total>=FL_IMPORT_MAX_ENTRIES){stats.cappedTotal=true;stats.skippedRows+=fa.length-j+ea.length;break}fOut.push(sanitizeFoodImportRow(fa[j],stDay));total++;stats.foodIn++}if(stats.cappedTotal){imp[dt]={food:fOut,exercise:[]};stats.datesUsed++;stats.truncStrings+=stDay.truncStrings;break outer}for(j=0;j<ea.length;j++){if(total>=FL_IMPORT_MAX_ENTRIES){stats.cappedTotal=true;stats.skippedRows+=ea.length-j;break}eOut.push(sanitizeExerciseImportRow(ea[j],stDay));total++;stats.exIn++}imp[dt]={food:fOut,exercise:eOut};stats.datesUsed++;stats.truncStrings+=stDay.truncStrings;if(stats.cappedTotal)break outer}return{imp:imp,stats:stats}}
+function sanitizeImportedAllDays(allDays){var stats={datesUsed:0,badDateKeys:0,foodIn:0,exIn:0,skippedRows:0,capDates:false,cappedTotal:false,truncStrings:0};var imp={};if(!allDays||typeof allDays!=="object"||Array.isArray(allDays))return{imp:imp,stats:stats};var rawKeys=Object.keys(allDays),i,u;for(u=0;u<rawKeys.length;u++){var rk=rawKeys[u];if(isBlockedImportKey(rk))continue;if(!isValidImportDateKey(rk))stats.badDateKeys++}var keys=rawKeys.filter(function(k){return !isBlockedImportKey(k)&&isValidImportDateKey(k)}).sort();if(keys.length>FL_IMPORT_MAX_DATES){stats.capDates=true;keys=keys.slice(0,FL_IMPORT_MAX_DATES)}var total=0;outer:for(i=0;i<keys.length;i++){var dt=keys[i];var day=allDays[dt]||{};var fa=Array.isArray(day.food)?day.food:[];var ea=Array.isArray(day.exercise)?day.exercise:[];var fOut=[],eOut=[],j,stDay={truncStrings:0};for(j=0;j<fa.length;j++){if(total>=FL_IMPORT_MAX_ENTRIES){stats.cappedTotal=true;stats.skippedRows+=fa.length-j+ea.length;break}fOut.push(sanitizeFoodImportRow(fa[j],stDay));total++;stats.foodIn++}var mOut=sanitizeMetricsImport(day.metrics);if(stats.cappedTotal){var cappedDay={food:fOut,exercise:[]};if(mOut)cappedDay.metrics=mOut;imp[dt]=cappedDay;stats.datesUsed++;stats.truncStrings+=stDay.truncStrings;break outer}for(j=0;j<ea.length;j++){if(total>=FL_IMPORT_MAX_ENTRIES){stats.cappedTotal=true;stats.skippedRows+=ea.length-j;break}eOut.push(sanitizeExerciseImportRow(ea[j],stDay));total++;stats.exIn++}var normalDay={food:fOut,exercise:eOut};if(mOut)normalDay.metrics=mOut;imp[dt]=normalDay;stats.datesUsed++;stats.truncStrings+=stDay.truncStrings;if(stats.cappedTotal)break outer}return{imp:imp,stats:stats}}
+function sanitizeMetricsImport(raw){if(!raw||typeof raw!=="object")return null;var out={};if(raw.weight!=null){var w=clampImportNumber(raw.weight,0,999);if(w>0)out.weight=w}if(raw.bodyFat!=null){var bf=clampImportNumber(raw.bodyFat,0,100);if(bf>0)out.bodyFat=bf}if(raw.muscle!=null){var mu=clampImportNumber(raw.muscle,0,999);if(mu>0)out.muscle=mu}if(raw.note!=null)out.note=truncateImportString(String(raw.note),FL_DESC_MAX_LEN);return Object.keys(out).length?out:null}
 function sanitizeGoalsImport(g){if(!g||typeof g!=="object")return null;var pr=clampImportNumber(g.protein,0,9999),fa=clampImportNumber(g.fat,0,9999),ca=clampImportNumber(g.carbs,0,99999);var cal=clampImportNumber(g.calories,0,999999);if(!cal)cal=Math.round(pr*4+fa*9+ca*4);return{protein:Math.round(pr),fat:Math.round(fa),carbs:Math.round(ca),calories:Math.round(cal)}}
 function sanitizeFavoritesImport(arr){if(!Array.isArray(arr))return[];var out=[],mi;for(mi=0;mi<arr.length&&out.length<500;mi++){var it=arr[mi];if(!it||typeof it!=="object")continue;var name=truncateImportString(it.name!=null?it.name:"",FL_FAV_NAME_MAX_LEN).trim();if(!name)continue;out.push({name:name,protein:clampImportNumber(it.protein,0,FL_IMPORT_NUM_MAX),fat:clampImportNumber(it.fat,0,FL_IMPORT_NUM_MAX),carbs:clampImportNumber(it.carbs,0,FL_IMPORT_NUM_MAX)})}return out}
 function sanitizeDefaultRulesStr(s){return truncateImportString(s==null?"":String(s),FL_DEFAULT_RULES_MAX_LEN)}
@@ -657,6 +659,122 @@ h("div",{style:{fontSize:10,color:"var(--text-ter)",textAlign:"right",marginTop:
 h("button",{onClick:doAdd,disabled:!has,style:A({},S.btn(!has?"var(--border-light)":"var(--teal)"),{width:"100%",minHeight:52,borderRadius:"var(--radius)",fontSize:16,fontWeight:700,opacity:!has?.5:1,boxShadow:has?"0 4px 16px rgba(42,125,110,0.25)":"none"})},"✓ 確認新增")))
 }
 
+function MetricsChart(p){
+var canvasRef=useRef(null),chartRef=useRef(null);
+useEffect(function(){
+if(!canvasRef.current||!window.Chart)return;
+if(chartRef.current){chartRef.current.destroy();chartRef.current=null}
+var data=p.data||[];
+if(data.length===0)return;
+var labels=data.map(function(d){var parts=d.date.split("-");return (parseInt(parts[1],10))+"/"+(parseInt(parts[2],10))});
+var datasets=[];
+var hasWeight=data.some(function(d){return d.weight!=null&&d.weight>0});
+var hasFat=data.some(function(d){return d.bodyFat!=null&&d.bodyFat>0});
+var hasMuscle=data.some(function(d){return d.muscle!=null&&d.muscle>0});
+if(hasWeight)datasets.push({label:"體重 kg",data:data.map(function(d){return d.weight||null}),borderColor:"#3565a0",backgroundColor:"rgba(53,101,160,0.08)",yAxisID:"y",tension:0.3,pointRadius:4,pointHoverRadius:6,spanGaps:true,borderWidth:2});
+if(hasFat)datasets.push({label:"體脂 %",data:data.map(function(d){return d.bodyFat||null}),borderColor:"#2a7d6e",backgroundColor:"rgba(42,125,110,0.08)",yAxisID:"y1",tension:0.3,pointRadius:4,pointHoverRadius:6,spanGaps:true,borderWidth:2});
+if(hasMuscle)datasets.push({label:"肌肉 kg",data:data.map(function(d){return d.muscle||null}),borderColor:"#7b4f8a",backgroundColor:"rgba(123,79,138,0.08)",yAxisID:"y",tension:0.3,pointRadius:4,pointHoverRadius:6,spanGaps:true,borderWidth:2});
+if(datasets.length===0)return;
+var scales={x:{ticks:{font:{size:11},color:"#8a7e6f",maxRotation:0},grid:{color:"rgba(44,37,24,0.04)"}},y:{position:"left",title:{display:hasMuscle||hasWeight,text:"kg",font:{size:10},color:"#8a7e6f"},ticks:{font:{size:10},color:"#8a7e6f"},grid:{color:"rgba(44,37,24,0.06)"}}};
+if(hasFat)scales.y1={position:"right",title:{display:true,text:"%",font:{size:10},color:"#8a7e6f"},ticks:{font:{size:10},color:"#8a7e6f"},grid:{drawOnChartArea:false}};
+chartRef.current=new Chart(canvasRef.current,{type:"line",data:{labels:labels,datasets:datasets},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,position:"bottom",labels:{font:{size:11},color:"#2c2518",padding:12,boxWidth:12,boxHeight:2}},tooltip:{callbacks:{title:function(items){return data[items[0].dataIndex]?data[items[0].dataIndex].date:""}}}},scales:scales,interaction:{intersect:false,mode:"index"}}});
+return function(){if(chartRef.current){chartRef.current.destroy();chartRef.current=null}};
+},[p.data]);
+if(!window.Chart)return h("div",{style:{padding:"12px 0",fontSize:12,color:"var(--text-ter)",textAlign:"center"}},"圖表載入失敗，請檢查網路");
+if(!p.data||p.data.length===0)return h("div",{style:{padding:"24px 0",fontSize:13,color:"var(--text-ter)",textAlign:"center"}},"尚無資料可顯示");
+return h("div",{style:{position:"relative",height:220}},h("canvas",{ref:canvasRef}));
+}
+
+function MetricsTab(p){
+var _range=useState(30),range=_range[0],setRange=_range[1];
+var allDays=p.allDays,today=todayStr();
+var cutoff=addDays(today,-range+1);
+var allMetricsDates=Object.keys(allDays).filter(function(d){return allDays[d]&&allDays[d].metrics}).sort();
+var latestDate=allMetricsDates.length?allMetricsDates[allMetricsDates.length-1]:null;
+var latestMetrics=latestDate?allDays[latestDate].metrics:null;
+var chartData=allMetricsDates.filter(function(d){return d>=cutoff}).map(function(d){var m=allDays[d].metrics;return{date:d,weight:m.weight||null,bodyFat:m.bodyFat||null,muscle:m.muscle||null}});
+var pillBtn=function(active){return{flex:1,padding:"8px 0",border:"none",fontSize:12,fontWeight:600,borderRadius:"var(--radius-xs)",cursor:"pointer",background:active?"var(--accent)":"var(--card-alt)",color:active?"#fff":"var(--text-sec)",transition:"all .2s",WebkitTapHighlightColor:"transparent"}};
+return h("div",{style:{padding:"0 16px 16px"}},
+latestMetrics?h("div",{className:"fade-up",style:A({},S.card,{marginBottom:12})},
+h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}},
+h("span",{style:{fontSize:15,fontWeight:700,color:"var(--text)"}},"最新體態"),
+h("span",{style:{fontSize:11,color:"var(--text-ter)"}},latestDate===today?"今天記錄":"上次："+latestDate.slice(5).replace("-","/")),
+h("button",{onClick:function(){p.onEdit(latestDate)},style:A({},S.btn("var(--card-alt)","var(--text-sec)","1px solid var(--border)"),{minHeight:30,padding:"0 12px",borderRadius:"var(--radius-xs)",fontSize:12})},"編輯")),
+h("div",{style:{display:"flex",gap:0}},
+[latestMetrics.weight!=null&&latestMetrics.weight>0?["體重","var(--blue)",latestMetrics.weight,"kg"]:null,
+latestMetrics.bodyFat!=null&&latestMetrics.bodyFat>0?["體脂率","var(--teal)",latestMetrics.bodyFat,"%"]:null,
+latestMetrics.muscle!=null&&latestMetrics.muscle>0?["肌肉量","var(--plum)",latestMetrics.muscle,"kg"]:null].filter(Boolean).map(function(x,i,arr){return h("div",{key:x[0],style:{flex:1,textAlign:"center",padding:"8px 0",borderRight:i<arr.length-1?"1px solid var(--border-light)":"none"}},
+h("div",{style:{fontSize:26,fontWeight:800,color:x[1],fontVariantNumeric:"tabular-nums",lineHeight:1}},x[2],h("span",{style:{fontSize:11,fontWeight:400,marginLeft:1}},x[3])),
+h("div",{style:{fontSize:10,color:"var(--text-ter)",marginTop:3}},x[0]))}))
+):h("div",{className:"fade-up",style:A({},S.cardFlat,{padding:"28px 0",textAlign:"center",marginBottom:12})},
+h("div",{style:{fontSize:28,marginBottom:8}},"📏"),
+h("div",{style:{fontSize:15,fontWeight:700,color:"var(--text)",marginBottom:6}},"尚無體態紀錄"),
+h("div",{style:{fontSize:13,color:"var(--text-ter)",marginBottom:0}},"開始記錄體重、體脂率和肌肉量")),
+h("button",{onClick:function(){p.onAdd(today)},style:A({},S.btn(),{width:"100%",minHeight:46,borderRadius:"var(--radius-sm)",fontSize:14,fontWeight:700,marginBottom:16,boxShadow:"0 4px 16px rgba(196,93,44,0.2)"})},"📏 記錄今日體態"),
+allMetricsDates.length>=2&&h("div",{className:"fade-up",style:A({},S.card,{marginBottom:12})},
+h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}},
+h("span",{style:{fontSize:14,fontWeight:700,color:"var(--text)"}},"趨勢圖表"),
+h("div",{style:{display:"flex",gap:4}},[7,30,90].map(function(r){return h("button",{key:r,onClick:function(){setRange(r)},style:pillBtn(range===r)},r+"天")}))),
+h(MetricsChart,{data:chartData,range:range})),
+allMetricsDates.length>0&&h("div",{style:A({},S.card,{padding:0,overflow:"hidden"})},
+h("div",{style:{padding:"14px 16px 10px"}},h("span",{style:{fontSize:14,fontWeight:700,color:"var(--text)"}},"歷史紀錄")),
+allMetricsDates.slice().reverse().slice(0,20).map(function(d,i,arr){var m=allDays[d].metrics;return h("button",{key:d,onClick:function(){p.onEdit(d)},style:{display:"flex",justifyContent:"space-between",alignItems:"center",width:"100%",padding:"10px 16px",background:"none",border:"none",borderBottom:i<arr.length-1?"1px solid var(--border-light)":"none",cursor:"pointer",fontFamily:"inherit",WebkitTapHighlightColor:"transparent"}},
+h("div",{style:{textAlign:"left"}},h("div",{style:{fontWeight:600,fontSize:13,color:"var(--text)"}},d===today?"今天":d.slice(5).replace("-","/")),h("div",{style:{fontSize:11,color:"var(--text-ter)",marginTop:1}},"（",weekday(d),"）")),
+h("div",{style:{display:"flex",gap:10,alignItems:"center"}},
+m.weight>0&&h("span",{style:{fontSize:13,fontWeight:700,color:"var(--blue)",fontVariantNumeric:"tabular-nums"}},m.weight,"kg"),
+m.bodyFat>0&&h("span",{style:{fontSize:13,fontWeight:700,color:"var(--teal)",fontVariantNumeric:"tabular-nums"}},m.bodyFat,"%"),
+m.muscle>0&&h("span",{style:{fontSize:13,fontWeight:700,color:"var(--plum)",fontVariantNumeric:"tabular-nums"}},m.muscle,"kg"),
+h("span",{style:{fontSize:13,color:"var(--text-ter)"}},"›")))}))));
+}
+
+function MetricsSheet(p){
+var existingMetrics=(p.allDays&&p.allDays[p.defaultDate]&&p.allDays[p.defaultDate].metrics)||null;
+var _d=useState(p.defaultDate),date=_d[0],setDate=_d[1];
+var _w=useState(existingMetrics&&existingMetrics.weight>0?String(existingMetrics.weight):""),weightVal=_w[0],setWeightVal=_w[1];
+var _bf=useState(existingMetrics&&existingMetrics.bodyFat>0?String(existingMetrics.bodyFat):""),bodyFatVal=_bf[0],setBodyFatVal=_bf[1];
+var _mu=useState(existingMetrics&&existingMetrics.muscle>0?String(existingMetrics.muscle):""),muscleVal=_mu[0],setMuscleVal=_mu[1];
+var _nt=useState(existingMetrics&&existingMetrics.note?existingMetrics.note:""),noteVal=_nt[0],setNoteVal=_nt[1];
+var _busy=useState(false),busy=_busy[0],setBusy=_busy[1];
+useEffect(function(){
+var m=(p.allDays&&p.allDays[date]&&p.allDays[date].metrics)||null;
+setWeightVal(m&&m.weight>0?String(m.weight):"");
+setBodyFatVal(m&&m.bodyFat>0?String(m.bodyFat):"");
+setMuscleVal(m&&m.muscle>0?String(m.muscle):"");
+setNoteVal(m&&m.note?m.note:"");
+},[date,p.allDays]);
+var hasExisting=(p.allDays&&p.allDays[date]&&p.allDays[date].metrics)?true:false;
+var hasInput=+weightVal>0||+bodyFatVal>0||+muscleVal>0;
+var doSave=function(){
+if(!hasInput)return;
+setBusy(true);
+var m={};
+if(+weightVal>0)m.weight=Math.round(+weightVal*10)/10;
+if(+bodyFatVal>0)m.bodyFat=Math.round(+bodyFatVal*10)/10;
+if(+muscleVal>0)m.muscle=Math.round(+muscleVal*10)/10;
+if(noteVal.trim())m.note=noteVal.trim().slice(0,120);
+var res=p.onSave(date,m);
+if(res&&typeof res.then==="function")res.then(function(){setBusy(false);p.onClose()}).catch(function(){setBusy(false)});
+else{setBusy(false);p.onClose()}
+};
+var doClear=function(){
+if(!hasExisting)return;
+if(!window.confirm("確定清除 "+date+" 的體態記錄？"))return;
+var res=p.onSave(date,null);
+if(res&&typeof res.then==="function")res.then(function(){p.onClose()}).catch(function(){});
+else p.onClose();
+};
+return h("div",{className:"fade-in",style:S.overlay,onClick:p.onClose},
+h("div",{className:"slide-up",style:S.sheet,onClick:function(e){e.stopPropagation()}},
+h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}},h("div",{style:{fontSize:18,fontWeight:700,fontFamily:"var(--font-display)"}},"記錄體態"),h("button",{onClick:p.onClose,style:A({},S.btn("var(--card-alt)","var(--text-sec)"),{minHeight:32,minWidth:32,padding:0,borderRadius:8,fontSize:15})},"✕")),
+h("div",{style:{marginBottom:16}},h("div",{style:S.label},"日期"),h(DateNav,{date:date,setDate:setDate})),
+h("div",{style:{display:"flex",gap:8,marginBottom:16}},[["weightVal","體重","kg",setWeightVal,0,500],["bodyFatVal","體脂率","%",setBodyFatVal,0,100],["muscleVal","肌肉量","kg",setMuscleVal,0,300]].map(function(x){return h("div",{key:x[0],style:{flex:1}},
+h("div",{style:A({},S.label,{fontSize:10})},x[1]+" "+x[2]),
+h("input",{type:"number",inputMode:"decimal",value:x[0]==="weightVal"?weightVal:x[0]==="bodyFatVal"?bodyFatVal:muscleVal,onChange:function(e){x[3](e.target.value)},placeholder:"—",style:A({},S.input,{padding:"10px 8px",fontSize:18,textAlign:"center",fontWeight:700})}))})),
+h("div",{style:{marginBottom:16}},h("div",{style:S.label},"備註（選填）"),h("input",{type:"text",value:noteVal,onChange:function(e){setNoteVal(e.target.value)},placeholder:"例：早晨空腹測量",maxLength:120,style:S.input})),
+h("button",{onClick:doSave,disabled:!hasInput||busy,style:A({},S.btn(!hasInput||busy?"var(--border-light)":"var(--accent)"),{width:"100%",minHeight:52,borderRadius:"var(--radius)",fontSize:16,fontWeight:700,marginBottom:hasExisting?10:0,opacity:(!hasInput||busy)?.5:1,boxShadow:hasInput&&!busy?"0 4px 16px rgba(196,93,44,0.25)":"none"})},"✓ 確認儲存"),
+hasExisting&&h("button",{onClick:doClear,style:A({},S.btn("var(--red-light)","var(--red)","1px solid var(--red-border)"),{width:"100%",minHeight:44,borderRadius:"var(--radius)",fontSize:14})},"🗑 清除此日體態記錄")));
+}
+
 function QuickAddSheet(p){
 var _items=useState(p.favorites),items=_items[0],setItems=_items[1];
 var _drag=useState(null),dragIdx=_drag[0],setDragIdx=_drag[1];
@@ -741,11 +859,11 @@ var gcal=calcCal(g.protein,g.fat,g.carbs),dc=Object.keys(p.allDays).length;
 var tf=Object.values(p.allDays).reduce(function(s,d){return s+(d.food||[]).length},0);
 var te=Object.values(p.allDays).reduce(function(s,d){return s+(d.exercise||[]).length},0);
 var sg=function(k,v){var u={};u[k]=v;setG(function(prev){return A({},prev,u)})};
-var exportCSV=function(){var rows=[["日期","類型","描述","時間","蛋白質g","脂肪g","碳水g","熱量kcal","消耗kcal","時長min"]];Object.keys(p.allDays).sort().forEach(function(d){var day=p.allDays[d];(day.food||[]).forEach(function(f){rows.push([d,"飲食",escapeCsvFormulaCell(f.desc),escapeCsvFormulaCell(f.time||""),f.protein,f.fat,f.carbs,calcCal(f.protein,f.fat,f.carbs),"",""])});(day.exercise||[]).forEach(function(e){rows.push([d,"運動",escapeCsvFormulaCell(e.desc),escapeCsvFormulaCell(e.time||""),"","","","",e.calories,e.duration||""])})});var csv="\uFEFF"+rows.map(function(r){return r.map(function(c){return'"'+String(c).replace(/"/g,'""')+'"'}).join(",")}).join("\n");var b=new Blob([csv],{type:"text/csv;charset=utf-8"}),u=URL.createObjectURL(b),a=document.createElement("a");a.href=u;a.download="fitlog_"+todayStr()+".csv";a.click();URL.revokeObjectURL(u);p.showToast("✅ CSV 已匯出（已防試算表公式注入）")};
+var exportCSV=function(){var rows=[["日期","類型","描述","時間","蛋白質g","脂肪g","碳水g","熱量kcal","消耗kcal","時長min","體重kg","體脂%","肌肉量kg"]];Object.keys(p.allDays).sort().forEach(function(d){var day=p.allDays[d];(day.food||[]).forEach(function(f){rows.push([d,"飲食",escapeCsvFormulaCell(f.desc),escapeCsvFormulaCell(f.time||""),f.protein,f.fat,f.carbs,calcCal(f.protein,f.fat,f.carbs),"","","","",""])});(day.exercise||[]).forEach(function(e){rows.push([d,"運動",escapeCsvFormulaCell(e.desc),escapeCsvFormulaCell(e.time||""),"","","","",e.calories,e.duration||"","","",""])});if(day.metrics){var m=day.metrics;rows.push([d,"體態","","","","","","","","",m.weight||"",m.bodyFat||"",m.muscle||""])}});var csv="\uFEFF"+rows.map(function(r){return r.map(function(c){return'"'+String(c).replace(/"/g,'""')+'"'}).join(",")}).join("\n");var b=new Blob([csv],{type:"text/csv;charset=utf-8"}),u=URL.createObjectURL(b),a=document.createElement("a");a.href=u;a.download="fitlog_"+todayStr()+".csv";a.click();URL.revokeObjectURL(u);p.showToast("✅ CSV 已匯出（已防試算表公式注入）")};
 var parseCSVLine=function(line){var out=[],cur="",inQ=false;for(var i=0;i<line.length;i++){var ch=line[i];if(inQ){if(ch==="\""){if(line[i+1]==="\""){cur+="\"";i++;}else{inQ=false}}else{cur+=ch}}else{if(ch===","){out.push(cur);cur=""}else if(ch==="\""){inQ=true}else{cur+=ch}}}out.push(cur);return out};
-var importCSV=function(e){var inp=e.target,file=inp.files&&inp.files[0];if(!file)return;var reader=new FileReader();reader.onload=function(ev){try{var lines=ev.target.result.split("\n").map(function(l){return l.trim()}).filter(Boolean);if(lines.length<2){p.showToast("CSV 為空");return}var imp={};for(var i=1;i<lines.length;i++){var cols=parseCSVLine(lines[i]);var dt=cols[0],tp=cols[1],ds=cols[2],tm=cols[3];if(!dt)continue;if(!imp[dt])imp[dt]={food:[],exercise:[]};if(tp==="飲食")imp[dt].food.push({id:uid(),desc:ds,time:tm,protein:+cols[4]||0,fat:+cols[5]||0,carbs:+cols[6]||0});else if(tp==="運動")imp[dt].exercise.push({id:uid(),desc:ds,time:tm,calories:+cols[8]||0,duration:+cols[9]||0})}var sani=sanitizeImportedAllDays(imp),impClean=sani.imp,washNote=formatImportSanitizeNote(sani.stats),preMsg="\n\n匯入會驗證日期與欄位；無效日期、過長描述／時間、異常數值會略過或截斷（最多 "+FL_IMPORT_MAX_DATES+" 天／"+FL_IMPORT_MAX_ENTRIES+" 筆）。";if(Object.keys(impClean).length===0){p.showToast("無有效日期可匯入（須為 YYYY-MM-DD）");inp.value="";return}if(!window.confirm("匯入將以 CSV 內容取代目前所有日期紀錄：檔案中未出現的日期會被清空。\n建議先匯出備份。確定繼續？"+preMsg+washNote)){inp.value="";return}var n=Object.keys(impClean).length;p.onImport(impClean).then(function(){var t2="✅ 已匯入 "+n+" 天";if(washNote)t2+="（已清洗）";p.showToast(t2)}).catch(function(err){if(!(err&&err.code===FL_STORAGE_FULL))p.showToast("匯入失敗")})}catch(err){p.showToast("匯入失敗")}finally{inp.value=""}};reader.readAsText(file)};
+var importCSV=function(e){var inp=e.target,file=inp.files&&inp.files[0];if(!file)return;var reader=new FileReader();reader.onload=function(ev){try{var lines=ev.target.result.split("\n").map(function(l){return l.trim()}).filter(Boolean);if(lines.length<2){p.showToast("CSV 為空");return}var imp={};for(var i=1;i<lines.length;i++){var cols=parseCSVLine(lines[i]);var dt=cols[0],tp=cols[1],ds=cols[2],tm=cols[3];if(!dt)continue;if(!imp[dt])imp[dt]={food:[],exercise:[]};if(tp==="飲食")imp[dt].food.push({id:uid(),desc:ds,time:tm,protein:+cols[4]||0,fat:+cols[5]||0,carbs:+cols[6]||0});else if(tp==="運動")imp[dt].exercise.push({id:uid(),desc:ds,time:tm,calories:+cols[8]||0,duration:+cols[9]||0});else if(tp==="體態"){var mw=+cols[10]||0,mbf=+cols[11]||0,mmu=+cols[12]||0;if(mw>0||mbf>0||mmu>0){var mImp={};if(mw>0)mImp.weight=mw;if(mbf>0)mImp.bodyFat=mbf;if(mmu>0)mImp.muscle=mmu;imp[dt].metrics=mImp}}}var sani=sanitizeImportedAllDays(imp),impClean=sani.imp,washNote=formatImportSanitizeNote(sani.stats),preMsg="\n\n匯入會驗證日期與欄位；無效日期、過長描述／時間、異常數值會略過或截斷（最多 "+FL_IMPORT_MAX_DATES+" 天／"+FL_IMPORT_MAX_ENTRIES+" 筆）。";if(Object.keys(impClean).length===0){p.showToast("無有效日期可匯入（須為 YYYY-MM-DD）");inp.value="";return}if(!window.confirm("匯入將以 CSV 內容取代目前所有日期紀錄：檔案中未出現的日期會被清空。\n建議先匯出備份。確定繼續？"+preMsg+washNote)){inp.value="";return}var n=Object.keys(impClean).length;p.onImport(impClean).then(function(){var t2="✅ 已匯入 "+n+" 天";if(washNote)t2+="（已清洗）";p.showToast(t2)}).catch(function(err){if(!(err&&err.code===FL_STORAGE_FULL))p.showToast("匯入失敗")})}catch(err){p.showToast("匯入失敗")}finally{inp.value=""}};reader.readAsText(file)};
 var exportJSON=function(){var payload={version:1,exportedAt:new Date().toISOString(),allDays:p.allDays,favorites:p.favorites,goals:p.goals,settings:{defaultRules:(p.settings&&p.settings.defaultRules)||""}};exportBackupJSON(payload,p.showToast)};
-var importJSON=function(e){var inp=e.target,file=inp.files&&inp.files[0];if(!file)return;var reader=new FileReader();reader.onload=function(ev){try{var data=JSON.parse(ev.target.result);var allDays=data.allDays||data.days;if(!allDays||typeof allDays!=="object"||Array.isArray(allDays)){p.showToast("JSON 格式不正確：缺少 allDays");return}var imp={};Object.keys(allDays).forEach(function(dt){var day=allDays[dt]||{};imp[dt]={food:day.food||[],exercise:day.exercise||[]}});var sani=sanitizeImportedAllDays(imp),impClean=sani.imp,washNote=formatImportSanitizeNote(sani.stats);var parts=["所有日期紀錄"];var gSan=data.goals&&typeof data.goals==="object"&&!Array.isArray(data.goals)?sanitizeGoalsImport(data.goals):null;if(gSan)parts.push("每日目標");var importedRules=(data.settings&&data.settings.defaultRules!=null)?String(data.settings.defaultRules):((data.defaultRules!=null)?String(data.defaultRules):null);var rulesSan=importedRules!==null?sanitizeDefaultRulesStr(importedRules):null;if(importedRules!==null)parts.push("預設估算規則");var favImp=data.favorites&&Array.isArray(data.favorites),favSan=favImp?sanitizeFavoritesImport(data.favorites):null;if(favImp)parts.push("常用清單");var preMsg="\n\n匯入會驗證並清洗資料（日期、描述長度、數值範圍、筆數上限同上）。";if(Object.keys(impClean).length===0){p.showToast("無有效日期可匯入（須為 YYYY-MM-DD）");inp.value="";return}if(!window.confirm("匯入將取代："+parts.join("、")+"。\n現有資料將以備份檔為準。\n建議先匯出備份。確定繼續？"+preMsg+washNote)){inp.value="";return}var chain=Promise.resolve();if(gSan&&p.onSaveGoals)chain=chain.then(function(){return p.onSaveGoals(gSan)});if(rulesSan!==null&&p.onSaveSettings)chain=chain.then(function(){return p.onSaveSettings(A({},p.settings,{defaultRules:rulesSan}))});if(favImp&&p.onSaveFavorites)chain=chain.then(function(){return p.onSaveFavorites(favSan)});chain=chain.then(function(){return p.onImport(impClean)});chain.then(function(){var t2="✅ 已匯入備份 "+Object.keys(impClean).length+" 天";if(washNote)t2+="（已清洗）";p.showToast(t2)}).catch(function(err){if(!(err&&err.code===FL_STORAGE_FULL))p.showToast("匯入失敗")})}catch(err){p.showToast("JSON 解析失敗")}finally{inp.value=""}};reader.readAsText(file)};
+var importJSON=function(e){var inp=e.target,file=inp.files&&inp.files[0];if(!file)return;var reader=new FileReader();reader.onload=function(ev){try{var data=JSON.parse(ev.target.result);var allDays=data.allDays||data.days;if(!allDays||typeof allDays!=="object"||Array.isArray(allDays)){p.showToast("JSON 格式不正確：缺少 allDays");return}var imp={};Object.keys(allDays).forEach(function(dt){var day=allDays[dt]||{};var dayObj={food:day.food||[],exercise:day.exercise||[]};if(day.metrics&&typeof day.metrics==="object")dayObj.metrics=day.metrics;imp[dt]=dayObj});var sani=sanitizeImportedAllDays(imp),impClean=sani.imp,washNote=formatImportSanitizeNote(sani.stats);var parts=["所有日期紀錄"];var gSan=data.goals&&typeof data.goals==="object"&&!Array.isArray(data.goals)?sanitizeGoalsImport(data.goals):null;if(gSan)parts.push("每日目標");var importedRules=(data.settings&&data.settings.defaultRules!=null)?String(data.settings.defaultRules):((data.defaultRules!=null)?String(data.defaultRules):null);var rulesSan=importedRules!==null?sanitizeDefaultRulesStr(importedRules):null;if(importedRules!==null)parts.push("預設估算規則");var favImp=data.favorites&&Array.isArray(data.favorites),favSan=favImp?sanitizeFavoritesImport(data.favorites):null;if(favImp)parts.push("常用清單");var preMsg="\n\n匯入會驗證並清洗資料（日期、描述長度、數值範圍、筆數上限同上）。";if(Object.keys(impClean).length===0){p.showToast("無有效日期可匯入（須為 YYYY-MM-DD）");inp.value="";return}if(!window.confirm("匯入將取代："+parts.join("、")+"。\n現有資料將以備份檔為準。\n建議先匯出備份。確定繼續？"+preMsg+washNote)){inp.value="";return}var chain=Promise.resolve();if(gSan&&p.onSaveGoals)chain=chain.then(function(){return p.onSaveGoals(gSan)});if(rulesSan!==null&&p.onSaveSettings)chain=chain.then(function(){return p.onSaveSettings(A({},p.settings,{defaultRules:rulesSan}))});if(favImp&&p.onSaveFavorites)chain=chain.then(function(){return p.onSaveFavorites(favSan)});chain=chain.then(function(){return p.onImport(impClean)});chain.then(function(){var t2="✅ 已匯入備份 "+Object.keys(impClean).length+" 天";if(washNote)t2+="（已清洗）";p.showToast(t2)}).catch(function(err){if(!(err&&err.code===FL_STORAGE_FULL))p.showToast("匯入失敗")})}catch(err){p.showToast("JSON 解析失敗")}finally{inp.value=""}};reader.readAsText(file)};
 return h("div",{className:"fade-in",style:S.overlay,onClick:p.onClose},
 h("div",{className:"slide-up",style:A({},S.sheet,{maxHeight:"min(95dvh, 95vh)",padding:0}),onClick:function(e){e.stopPropagation()}},
 h("div",{style:{position:"sticky",top:0,background:"var(--card)",padding:"20px 20px 14px",borderBottom:"1px solid var(--border)",borderRadius:"20px 20px 0 0",zIndex:1}},h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center"}},h("div",{style:{fontSize:18,fontWeight:700,fontFamily:"var(--font-display)"}},"設定"),h("button",{onClick:p.onClose,style:A({},S.btn("var(--card-alt)","var(--text-sec)"),{minHeight:32,minWidth:32,padding:0,borderRadius:8,fontSize:15})},"✕"))),
@@ -877,6 +995,7 @@ var _lgb=useState(function(){return readLastGdriveBackupIso()}),lastGdriveBackup
 var _bsd=useState(function(){try{return sessionStorage.getItem("fl_backup_stale_dismissed")==="1"}catch(e){return false}}),backupStaleDismissed=_bsd[0],setBackupStaleDismissed=_bsd[1];
 var _sbd=useState(function(){try{return sessionStorage.getItem("fl_storage_warn_dismissed")==="1"}catch(e){return false}}),storageBannerDismissed=_sbd[0],setStorageBannerDismissed=_sbd[1];
 var _ui=useState(null),undoItem=_ui[0],setUndoItem=_ui[1];
+var _msd=useState(todayStr()),metricsSheetDate=_msd[0],setMetricsSheetDate=_msd[1];
 var toastTimerRef=useRef(null),undoTimerRef=useRef(null),sheetOpenedAtRef=useRef(0);
 var sheetRef=useRef(null);
 var openSheet=function(next){if(next!=null)sheetOpenedAtRef.current=Date.now();setSheet(next)};
@@ -986,6 +1105,7 @@ var enqueueExerciseAiSummary=function(dt,id,desc,cal,dur){if(!checkAI())return;(
 
 var undoRestore=function(){var u=undoItem;if(!u)return Promise.resolve();clearUndoTimer();return runDayPersist(async function(){var prev=A({},daysRef.current),day=prev[u.date]||{food:[],exercise:[]},food=[].concat(day.food||[]),exercise=[].concat(day.exercise||[]),ins=u.kind==="food"?Math.min(u.index,food.length):Math.min(u.index,exercise.length);if(u.kind==="food")food.splice(ins,0,u.entry);else exercise.splice(ins,0,u.entry);var next={food:food,exercise:exercise},out=A({},prev);out[u.date]=next;daysRef.current=out;setAllDays(out);try{await DB.set("day:"+u.date,next)}catch(e){daysRef.current=prev;setAllDays(prev);throw e}}).then(function(){setUndoItem(null);return refreshStorageUsage()}).catch(function(){setUndoItem(null);showToast("復原失敗");return undefined})};
 
+var saveMetrics=function(d,metricsObj){return runDayPersist(async function(){var prev=A({},daysRef.current),day=prev[d]||{food:[],exercise:[]};var next={food:day.food||[],exercise:day.exercise||[]};if(metricsObj)next.metrics=metricsObj;else if(next.metrics)delete next.metrics;var u=A({},prev);u[d]=next;daysRef.current=u;setAllDays(u);try{await DB.set("day:"+d,next)}catch(e){daysRef.current=prev;setAllDays(prev);throw e}}).then(function(){return refreshStorageUsage()}).catch(function(){})};
 var addFood=function(d,entry){return runDayPersist(async function(){var prev=A({},daysRef.current),day=prev[d]||{food:[],exercise:[]},next={food:[].concat(day.food||[],[entry]),exercise:day.exercise||[]},u=A({},prev);u[d]=next;daysRef.current=u;setAllDays(u);try{await DB.set("day:"+d,next)}catch(e){daysRef.current=prev;setAllDays(prev);throw e}}).then(function(){return refreshStorageUsage()}).then(function(){if(shouldBackgroundSummarizeFood(entry))enqueueFoodAiSummary(d,entry.id,entry.desc,entry.protein,entry.fat,entry.carbs);if(d!==todayStr()){setDate(d);showToast("已新增至 "+d)}openSheet(null)})};
 var addExercise=function(d,entry){return runDayPersist(async function(){var prev=A({},daysRef.current),day=prev[d]||{food:[],exercise:[]},next={food:day.food||[],exercise:[].concat(day.exercise||[],[entry])},u=A({},prev);u[d]=next;daysRef.current=u;setAllDays(u);try{await DB.set("day:"+d,next)}catch(e){daysRef.current=prev;setAllDays(prev);throw e}}).then(function(){return refreshStorageUsage()}).then(function(){if(shouldBackgroundSummarizeExercise(entry))enqueueExerciseAiSummary(d,entry.id,entry.desc,entry.calories,entry.duration);if(d!==todayStr()){setDate(d);showToast("已新增至 "+d)}openSheet(null)})};
 var clearAllFoodForDate=function(dt){var day=daysRef.current[dt]||{food:[],exercise:[]},flist=day.food||[];if(flist.length<1)return Promise.resolve();return runDayPersist(async function(){var prev=A({},daysRef.current),d=prev[dt]||{food:[],exercise:[]},next={food:[],exercise:[].concat(d.exercise||[])},u=A({},prev);u[dt]=next;daysRef.current=u;setAllDays(u);setConfirmDel(null);try{await DB.set("day:"+dt,next)}catch(e){daysRef.current=prev;setAllDays(prev);throw e}}).then(function(){clearUndoTimer();setUndoItem(null);return refreshStorageUsage()}).then(function(){showToast("已清除 "+dt+" 的飲食紀錄")})};
@@ -1095,7 +1215,7 @@ h("div",{style:A({},S.numeric,{fontSize:32,fontWeight:900,color:"var(--text)",li
 h("div",{style:{fontSize:10,color:"var(--text-ter)",fontWeight:500,letterSpacing:"0.06em",textTransform:"uppercase",marginTop:3}},"NET KCAL"))),
 h("div",{style:{display:"flex",flexDirection:"column",gap:8}},[["攝入",intake,"var(--blue)"],["消耗",burned,"var(--teal)"],["目標",goals.calories,"var(--plum)"]].map(function(x){return h("div",{key:x[0],style:{display:"flex",alignItems:"center",gap:8}},h("div",{style:{width:8,height:8,borderRadius:4,background:x[2],flexShrink:0}}),h("span",{style:{fontSize:12,color:"var(--text-sec)",width:28}},x[0]),h("span",{style:A({},S.numeric,{fontSize:14,fontWeight:700,color:"var(--text)"})},x[1]),h("span",{style:{fontSize:10,color:"var(--text-ter)"}},"kcal"))}))),
 h("div",{style:{marginTop:4}},h(MacroBar,{label:"蛋白質",val:pr,goal:goals.protein,color:"var(--blue)"}),h(MacroBar,{label:"脂肪",val:ft,goal:goals.fat,color:"var(--amber)"}),h(MacroBar,{label:"碳水",val:cb,goal:goals.carbs,color:"var(--plum)"})),
-h("div",{style:{display:"flex",borderTop:"1px solid var(--border-light)",marginTop:6}},[["favorites","常用"],["history","歷史"],["records","紀錄"]].map(function(x){return h("button",{key:x[0],style:S.tabBtn(tab===x[0]),onClick:function(){setTab(x[0])}},x[1])}))),
+h("div",{style:{display:"flex",borderTop:"1px solid var(--border-light)",marginTop:6}},[["favorites","常用"],["history","歷史"],["records","紀錄"],["metrics","體態"]].map(function(x){return h("button",{key:x[0],style:S.tabBtn(tab===x[0]),onClick:function(){setTab(x[0])}},x[1])}))),
 
 h("div",{style:{padding:"14px 0 16px"}},
 tab==="records"&&h("div",null,
@@ -1132,7 +1252,8 @@ h("div",{style:{flex:1,textAlign:"center",padding:"8px 0",borderRight:"1px solid
 h("div",{style:{flex:1,textAlign:"center",padding:"8px 0"}},h("div",{style:{fontSize:18,fontWeight:800,color:"var(--blue)",fontVariantNumeric:"tabular-nums"}},e.duration||"—",h("span",{style:{fontSize:10,fontWeight:400}},e.duration?"min":"")),h("div",{style:{fontSize:10,color:"var(--text-ter)"}},"運動時長"))))}))),
 
 tab==="favorites"&&h(FavoritesTab,{favorites:favorites,onSave:saveFavs,settings:settings,date:date,showToast:showToast,onAddToDay:async function(fav){try{await addFood(date,{id:uid(),desc:fav.name,protein:fav.protein,fat:fav.fat,carbs:fav.carbs,time:new Date().toLocaleTimeString("zh-TW",{hour:"2-digit",minute:"2-digit"}),aiSummary:fav.name});showToast("已加入 "+fav.name)}catch(unused){}}}),
-tab==="history"&&h(HistoryTab,{allDays:allDays,goals:goals,onSelect:function(d){setDate(d);setTab("records")}}))),
+tab==="history"&&h(HistoryTab,{allDays:allDays,goals:goals,onSelect:function(d){setDate(d);setTab("records")}}),
+tab==="metrics"&&h(MetricsTab,{allDays:allDays,onAdd:function(d){setMetricsSheetDate(d);openSheet("metrics")},onEdit:function(d){setMetricsSheetDate(d);openSheet("metrics")}}))),
 
 !kbOpen&&!sheet&&h("div",{style:{flexShrink:0,background:"var(--card)",borderTop:"1px solid var(--border)",padding:"8px 12px calc(12px + env(safe-area-inset-bottom, 0px))",boxShadow:"0 -4px 16px rgba(44,37,24,.06)"}},
 h("div",{style:{display:"flex",gap:6}},
@@ -1143,6 +1264,7 @@ h("button",{style:A({},S.btn(),{flex:1,minHeight:46,borderRadius:"var(--radius-s
 sheet==="food"&&h(FoodSheet,{defaultDate:date,settings:settings,onAdd:addFood,onClose:function(){openSheet(null)}}),
 sheet==="exercise"&&h(ExerciseSheet,{defaultDate:date,onAdd:addExercise,onClose:function(){openSheet(null)}}),
 sheet==="quickadd"&&h(QuickAddSheet,{favorites:favorites,date:date,onAdd:async function(fav){try{await addFood(date,{id:uid(),desc:fav.name,protein:fav.protein,fat:fav.fat,carbs:fav.carbs,time:new Date().toLocaleTimeString("zh-TW",{hour:"2-digit",minute:"2-digit"}),aiSummary:fav.name});openSheet(null);showToast("已加入 "+fav.name)}catch(unused){}},onReorder:saveFavs,onClose:function(){openSheet(null)}}),
+sheet==="metrics"&&h(MetricsSheet,{defaultDate:metricsSheetDate,allDays:allDays,onSave:function(d,m){var res=saveMetrics(d,m);if(res&&typeof res.then==="function")res.then(function(){if(d!==todayStr())showToast("已儲存 "+d+" 的體態記錄")}).catch(function(){});return res},onClose:function(){openSheet(null)}}),
 sheet==="settings"&&h(SettingsSheet,{goals:goals,settings:settings,onSaveGoals:saveGoals,onSaveSettings:saveSett,onSaveFavorites:saveFavs,onClose:function(){openSheet(null)},allDays:allDays,favorites:favorites,onImport:handleImport,showToast:showToast,onApiKeySaved:function(){localStorage.removeItem("fl_apikey_banner_dismissed");bumpApiKeyEpoch(function(x){return x+1})},lastGdriveIso:lastGdriveBackupIso,onSyncGdriveLastBackup:syncLastGdriveBackupFromCloud,onGdriveBackup:doGdriveBackup,onGdriveRestore:doGdriveRestore}),
 undoItem&&h("div",{className:"fade-in",style:{position:"fixed",left:16,right:16,bottom:100,maxWidth:448,margin:"0 auto",zIndex:205,background:"var(--text)",color:"#fff",borderRadius:"var(--radius-sm)",padding:"10px 14px",fontSize:13,fontWeight:500,boxShadow:"var(--shadow-lg)",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}},
 h("span",{style:{flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},"已刪除 ",undoItem.desc),
