@@ -691,11 +691,11 @@ if(hasW)datasets.push({type:"line",label:"體重 kg",data:weightData,borderColor
 if(hasF)datasets.push({type:"line",label:"體脂 %",data:fatData,borderColor:"#7b4f8a",backgroundColor:"rgba(123,79,138,0.08)",yAxisID:hasCal&&hasW?"y2":hasCal?"y1":"y",tension:0.3,pointRadius:4,pointHoverRadius:6,spanGaps:true,borderWidth:2,order:1});
 var nd={drawOnChartArea:false};
 var scales={x:{ticks:{font:{size:11},color:"#8a7e6f",maxRotation:0,maxTicksLimit:8},grid:{color:"rgba(44,37,24,0.04)"}}};
-if(hasCal){scales.y={position:"left",ticks:{font:{size:10},color:"#8a7e6f"},grid:{color:function(ctx){return ctx.tick.value===0?"rgba(44,37,24,0.3)":"rgba(44,37,24,0.06)"},lineWidth:function(ctx){return ctx.tick.value===0?1.5:1}},title:{display:true,text:goal>0?"vs 目標 kcal":"kcal",font:{size:10},color:"#8a7e6f"}}}
-else{scales.y={position:"left",ticks:{font:{size:10},color:"#8a7e6f"},grid:{color:"rgba(44,37,24,0.06)"},title:{display:true,text:hasW?"kg":"%",font:{size:10},color:"#8a7e6f"}}}
-if(hasCal&&hasW){scales.y1={position:"right",ticks:{font:{size:10},color:"#3565a0"},grid:nd,title:{display:true,text:"kg",font:{size:10},color:"#3565a0"}}}
-if(hasCal&&hasF&&hasW){scales.y2={position:"right",ticks:{font:{size:10},color:"#7b4f8a"},grid:nd,title:{display:true,text:"%",font:{size:10},color:"#7b4f8a"},offset:true}}
-else if(hasCal&&hasF&&!hasW){scales.y1={position:"right",ticks:{font:{size:10},color:"#7b4f8a"},grid:nd,title:{display:true,text:"%",font:{size:10},color:"#7b4f8a"}}}
+if(hasCal){scales.y={position:"left",ticks:{font:{size:10},color:"#8a7e6f"},grid:{color:function(ctx){return ctx.tick.value===0?"rgba(44,37,24,0.3)":"rgba(44,37,24,0.06)"},lineWidth:function(ctx){return ctx.tick.value===0?1.5:1}},title:{display:true,text:goal>0?"vs 目標 kcal":"kcal",font:{size:10},color:"#8a7e6f",rotation:90}}}
+else{scales.y={position:"left",ticks:{font:{size:10},color:"#8a7e6f"},grid:{color:"rgba(44,37,24,0.06)"},title:{display:true,text:hasW?"kg":"%",font:{size:10},color:"#8a7e6f",rotation:90}}}
+if(hasCal&&hasW){scales.y1={position:"right",ticks:{font:{size:10},color:"#3565a0"},grid:nd,title:{display:true,text:"kg",font:{size:10},color:"#3565a0",rotation:90}}}
+if(hasCal&&hasF&&hasW){scales.y2={position:"right",ticks:{font:{size:10},color:"#7b4f8a"},grid:nd,title:{display:true,text:"%",font:{size:10},color:"#7b4f8a",rotation:90},offset:true}}
+else if(hasCal&&hasF&&!hasW){scales.y1={position:"right",ticks:{font:{size:10},color:"#7b4f8a"},grid:nd,title:{display:true,text:"%",font:{size:10},color:"#7b4f8a",rotation:90}}}
 clear();
 try{chartRef.current=new window.Chart(canvas,{type:"bar",data:{labels:labels,datasets:datasets},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,position:"bottom",labels:{font:{size:11},color:"#2c2518",padding:8,boxWidth:12,boxHeight:2}},tooltip:{callbacks:{title:function(items){return dates[items[0].dataIndex]||""},label:function(item){var v=item.raw;if(v==null)return item.dataset.label+": —";var prefix=goal>0&&item.datasetIndex===0?(v>0?"+":""):""  ;return item.dataset.label+": "+prefix+v}}}},scales:scales,interaction:{intersect:false,mode:"index"}}})}
 catch(e){show("圖表初始化失敗："+((e&&e.message)||String(e)));return}
@@ -742,8 +742,8 @@ if(hasWeight)datasets.push({label:"體重 kg",data:data.map(function(d){return d
 if(hasFat)datasets.push({label:"體脂 %",data:data.map(function(d){return d.bodyFat||null}),borderColor:"#2a7d6e",backgroundColor:"rgba(42,125,110,0.08)",yAxisID:"y1",tension:0.3,pointRadius:4,pointHoverRadius:6,spanGaps:true,borderWidth:2});
 if(hasMuscle)datasets.push({label:"肌肉 kg",data:data.map(function(d){return d.muscle||null}),borderColor:"#7b4f8a",backgroundColor:"rgba(123,79,138,0.08)",yAxisID:"y",tension:0.3,pointRadius:4,pointHoverRadius:6,spanGaps:true,borderWidth:2});
 if(!datasets.length){show("尚無資料可顯示");return}
-var scales={x:{ticks:{font:{size:11},color:"#8a7e6f",maxRotation:0},grid:{color:"rgba(44,37,24,0.04)"}},y:{position:"left",title:{display:hasMuscle||hasWeight,text:"kg",font:{size:10},color:"#8a7e6f"},ticks:{font:{size:10},color:"#8a7e6f"},grid:{color:"rgba(44,37,24,0.06)"}}};
-if(hasFat)scales.y1={position:"right",title:{display:true,text:"%",font:{size:10},color:"#2a7d6e"},ticks:{font:{size:10},color:"#2a7d6e"},grid:{drawOnChartArea:false}};
+var scales={x:{ticks:{font:{size:11},color:"#8a7e6f",maxRotation:0},grid:{color:"rgba(44,37,24,0.04)"}},y:{position:"left",title:{display:hasMuscle||hasWeight,text:"kg",font:{size:10},color:"#8a7e6f",rotation:90},ticks:{font:{size:10},color:"#8a7e6f"},grid:{color:"rgba(44,37,24,0.06)"}}};
+if(hasFat)scales.y1={position:"right",title:{display:true,text:"%",font:{size:10},color:"#2a7d6e",rotation:90},ticks:{font:{size:10},color:"#2a7d6e"},grid:{drawOnChartArea:false}};
 clear();
 try{chartRef.current=new window.Chart(canvas,{type:"line",data:{labels:labels,datasets:datasets},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,position:"bottom",labels:{font:{size:11},color:"#2c2518",padding:12,boxWidth:12,boxHeight:2}},tooltip:{callbacks:{title:function(items){return data[items[0].dataIndex]?data[items[0].dataIndex].date:""}}}},scales:scales,interaction:{intersect:false,mode:"index"}}})}
 catch(e){show("圖表初始化失敗："+((e&&e.message)||""));return}
@@ -783,7 +783,7 @@ h("button",{onClick:function(){p.onAdd(today)},style:A({},S.btn(),{width:"100%",
 allMetricsDates.length>=2&&h("div",{className:"fade-up",style:A({},S.card,{marginBottom:12})},
 h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}},
 h("span",{style:{fontSize:14,fontWeight:700,color:"var(--text)"}},"趨勢圖表"),
-h("div",{style:{display:"flex",gap:4}},[7,30,90].map(function(r){return h("button",{key:r,onClick:function(){setRange(r)},style:pillBtn(range===r)},r+"天")}))),
+h("div",{style:{display:"flex",gap:4,flexShrink:0}},[7,30,90].map(function(r){return h("button",{key:r,onClick:function(){setRange(r)},style:A({},pillBtn(range===r),{whiteSpace:"nowrap"})},r+"天")}))),
 h(MetricsChart,{data:chartData,range:range})),
 allMetricsDates.length>0&&h("div",{style:A({},S.card,{padding:0,overflow:"hidden"})},
 h("div",{style:{padding:"14px 16px 10px"}},h("span",{style:{fontSize:14,fontWeight:700,color:"var(--text)"}},"歷史紀錄")),
@@ -1070,7 +1070,7 @@ var _ui=useState(null),undoItem=_ui[0],setUndoItem=_ui[1];
 var _msd=useState(todayStr()),metricsSheetDate=_msd[0],setMetricsSheetDate=_msd[1];
 var toastTimerRef=useRef(null),undoTimerRef=useRef(null),sheetOpenedAtRef=useRef(0);
 var sheetRef=useRef(null);
-var openSheet=function(next){if(next!=null)sheetOpenedAtRef.current=Date.now();setSheet(next)};
+var openSheet=function(next){if(next!=null)sheetOpenedAtRef.current=Date.now();else sheetOpenedAtRef.current=0;setSheet(next)};
 useLayoutEffect(function(){sheetRef.current=sheet},[sheet]);
 var showToast=function(m){if(toastTimerRef.current){clearTimeout(toastTimerRef.current);toastTimerRef.current=null}setToast(m);toastTimerRef.current=setTimeout(function(){toastTimerRef.current=null;setToast(null)},2500)};
 var exportAppJSON=function(){exportBackupJSON({version:1,exportedAt:new Date().toISOString(),allDays:allDays,favorites:favorites,goals:goals,settings:{defaultRules:(settings&&settings.defaultRules)||""}},showToast)};
@@ -1160,7 +1160,7 @@ document.documentElement.style.setProperty("--vv-offset-top","0px");
 };
 },[sheet]);
 
-useEffect(function(){sheetOpenedAtRef.current=sheet?Date.now():0},[sheet]);
+
 
 useEffect(function(){(async function(){try{await migrateLocalStorageToIdbOnce();var r=await Promise.all([DB.get("favorites"),DB.get("settings"),DB.get("goals")]);if(r[0])setFavorites(r[0]);if(r[1])setSettings(r[1]);if(r[2])setGoals(r[2]);var keys=await DB.listKeys("day:");var days={};for(var i=0;i<keys.length;i++){var v=await DB.get(keys[i]);if(v)days[keys[i].replace("day:","")]=v}setAllDays(days)}catch(e){}setLoading(false);await refreshStorageUsage()})()},[]);
 useEffect(function(){daysRef.current=allDays},[allDays]);
