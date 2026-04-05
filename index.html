@@ -181,6 +181,18 @@ var addDays=function(d,n){var r=new Date(d+"T12:00:00");r.setDate(r.getDate()+n)
 var weekday=function(d){return["日","一","二","三","四","五","六"][new Date(d+"T12:00:00").getDay()]};
 var exportBackupJSON=function(payload,showToastFn){var blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json;charset=utf-8"}),u=URL.createObjectURL(blob),a=document.createElement("a");a.href=u;a.download="fitlog_backup_"+todayStr()+".json";a.click();URL.revokeObjectURL(u);if(showToastFn)showToastFn("✅ JSON 已匯出（含每日目標與預設規則）")};
 var DEFAULT_GOALS={protein:115,fat:60,carbs:200,calories:1800};
+var ALL_METRICS_FIELDS=[
+{key:"weight",label:"體重",unit:"kg",min:0,max:500,step:0.1},
+{key:"bmi",label:"BMI",unit:"",min:0,max:100,step:0.1},
+{key:"bodyFat",label:"體脂率",unit:"%",min:0,max:100,step:0.1},
+{key:"bodyWater",label:"體水分量",unit:"%",min:0,max:100,step:0.1},
+{key:"protein",label:"蛋白質量",unit:"%",min:0,max:100,step:0.1},
+{key:"fatMass",label:"脂肪量",unit:"kg",min:0,max:300,step:0.1},
+{key:"boneMass",label:"骨鹽量",unit:"kg",min:0,max:30,step:0.01},
+{key:"muscle",label:"肌肉量",unit:"kg",min:0,max:200,step:0.1},
+{key:"bmr",label:"基礎代謝率",unit:"kcal",min:0,max:9999,step:1}
+];
+var DEFAULT_METRICS_FIELDS=["weight","bodyFat","muscle"];
 var FL_IMPORT_MAX_DATES=400;
 var FL_IMPORT_MAX_ENTRIES=5000;
 var FL_DESC_MAX_LEN=120;
@@ -203,7 +215,7 @@ function truncateImportString(s,maxLen){var t=s==null?"":String(s);return t.leng
 function sanitizeFoodImportRow(raw,st){var descRaw=raw&&raw.desc!=null?String(raw.desc):"食物";var desc=truncateImportString(descRaw,FL_DESC_MAX_LEN);if(st&&descRaw.length>FL_DESC_MAX_LEN)st.truncStrings=(st.truncStrings||0)+1;var sumRaw=raw&&raw.aiSummary!=null?String(raw.aiSummary):"";var aiSummary=truncateImportString(sumRaw,FL_AI_SUMMARY_MAX_LEN);if(st&&sumRaw.length>FL_AI_SUMMARY_MAX_LEN)st.truncStrings=(st.truncStrings||0)+1;var id=(raw&&raw.id!=null&&String(raw.id).length<=80)?String(raw.id):uid();var time=truncateImportString(raw&&raw.time!=null?raw.time:"",FL_TIME_MAX_LEN);var row={id:id,desc:desc,time:time,protein:clampImportNumber(raw&&raw.protein,0,FL_IMPORT_NUM_MAX),fat:clampImportNumber(raw&&raw.fat,0,FL_IMPORT_NUM_MAX),carbs:clampImportNumber(raw&&raw.carbs,0,FL_IMPORT_NUM_MAX)};if(aiSummary)row.aiSummary=aiSummary;return row}
 function sanitizeExerciseImportRow(raw,st){var descRaw=raw&&raw.desc!=null?String(raw.desc):"運動";var desc=truncateImportString(descRaw,FL_DESC_MAX_LEN);if(st&&descRaw.length>FL_DESC_MAX_LEN)st.truncStrings=(st.truncStrings||0)+1;var sumRaw=raw&&raw.aiSummary!=null?String(raw.aiSummary):"";var aiSummary=truncateImportString(sumRaw,FL_AI_SUMMARY_MAX_LEN);if(st&&sumRaw.length>FL_AI_SUMMARY_MAX_LEN)st.truncStrings=(st.truncStrings||0)+1;var id=(raw&&raw.id!=null&&String(raw.id).length<=80)?String(raw.id):uid();var time=truncateImportString(raw&&raw.time!=null?raw.time:"",FL_TIME_MAX_LEN);var row={id:id,desc:desc,time:time,calories:clampImportNumber(raw&&raw.calories,0,FL_IMPORT_NUM_MAX),duration:clampImportNumber(raw&&raw.duration,0,14400)};if(aiSummary)row.aiSummary=aiSummary;return row}
 function sanitizeImportedAllDays(allDays){var stats={datesUsed:0,badDateKeys:0,foodIn:0,exIn:0,skippedRows:0,capDates:false,cappedTotal:false,truncStrings:0};var imp={};if(!allDays||typeof allDays!=="object"||Array.isArray(allDays))return{imp:imp,stats:stats};var rawKeys=Object.keys(allDays),i,u;for(u=0;u<rawKeys.length;u++){var rk=rawKeys[u];if(isBlockedImportKey(rk))continue;if(!isValidImportDateKey(rk))stats.badDateKeys++}var keys=rawKeys.filter(function(k){return !isBlockedImportKey(k)&&isValidImportDateKey(k)}).sort();if(keys.length>FL_IMPORT_MAX_DATES){stats.capDates=true;keys=keys.slice(0,FL_IMPORT_MAX_DATES)}var total=0;outer:for(i=0;i<keys.length;i++){var dt=keys[i];var day=allDays[dt]||{};var fa=Array.isArray(day.food)?day.food:[];var ea=Array.isArray(day.exercise)?day.exercise:[];var fOut=[],eOut=[],j,stDay={truncStrings:0};for(j=0;j<fa.length;j++){if(total>=FL_IMPORT_MAX_ENTRIES){stats.cappedTotal=true;stats.skippedRows+=fa.length-j+ea.length;break}fOut.push(sanitizeFoodImportRow(fa[j],stDay));total++;stats.foodIn++}var mOut=sanitizeMetricsImport(day.metrics);if(stats.cappedTotal){var cappedDay={food:fOut,exercise:[]};if(mOut)cappedDay.metrics=mOut;imp[dt]=cappedDay;stats.datesUsed++;stats.truncStrings+=stDay.truncStrings;break outer}for(j=0;j<ea.length;j++){if(total>=FL_IMPORT_MAX_ENTRIES){stats.cappedTotal=true;stats.skippedRows+=ea.length-j;break}eOut.push(sanitizeExerciseImportRow(ea[j],stDay));total++;stats.exIn++}var normalDay={food:fOut,exercise:eOut};if(mOut)normalDay.metrics=mOut;imp[dt]=normalDay;stats.datesUsed++;stats.truncStrings+=stDay.truncStrings;if(stats.cappedTotal)break outer}return{imp:imp,stats:stats}}
-function sanitizeMetricsImport(raw){if(!raw||typeof raw!=="object")return null;var out={};if(raw.weight!=null){var w=clampImportNumber(raw.weight,0,999);if(w>0)out.weight=w}if(raw.bodyFat!=null){var bf=clampImportNumber(raw.bodyFat,0,100);if(bf>0)out.bodyFat=bf}if(raw.muscle!=null){var mu=clampImportNumber(raw.muscle,0,999);if(mu>0)out.muscle=mu}if(raw.note!=null)out.note=truncateImportString(String(raw.note),FL_DESC_MAX_LEN);return Object.keys(out).length?out:null}
+function sanitizeMetricsImport(raw){if(!raw||typeof raw!=="object")return null;var out={};if(raw.weight!=null){var w=clampImportNumber(raw.weight,0,999);if(w>0)out.weight=w}if(raw.bmi!=null){var bmi=clampImportNumber(raw.bmi,0,100);if(bmi>0)out.bmi=bmi}if(raw.bodyFat!=null){var bf=clampImportNumber(raw.bodyFat,0,100);if(bf>0)out.bodyFat=bf}if(raw.bodyWater!=null){var bw=clampImportNumber(raw.bodyWater,0,100);if(bw>0)out.bodyWater=bw}if(raw.protein!=null){var pr=clampImportNumber(raw.protein,0,100);if(pr>0)out.protein=pr}if(raw.fatMass!=null){var fm=clampImportNumber(raw.fatMass,0,300);if(fm>0)out.fatMass=fm}if(raw.boneMass!=null){var bm=clampImportNumber(raw.boneMass,0,30);if(bm>0)out.boneMass=bm}if(raw.muscle!=null){var mu=clampImportNumber(raw.muscle,0,999);if(mu>0)out.muscle=mu}if(raw.bmr!=null){var bmr=clampImportNumber(raw.bmr,0,9999);if(bmr>0)out.bmr=bmr}if(raw.note!=null)out.note=truncateImportString(String(raw.note),FL_DESC_MAX_LEN);return Object.keys(out).length?out:null}
 function sanitizeGoalsImport(g){if(!g||typeof g!=="object")return null;var pr=clampImportNumber(g.protein,0,9999),fa=clampImportNumber(g.fat,0,9999),ca=clampImportNumber(g.carbs,0,99999);var cal=clampImportNumber(g.calories,0,999999);if(!cal)cal=Math.round(pr*4+fa*9+ca*4);return{protein:Math.round(pr),fat:Math.round(fa),carbs:Math.round(ca),calories:Math.round(cal)}}
 function sanitizeFavoritesImport(arr){if(!Array.isArray(arr))return[];var out=[],mi;for(mi=0;mi<arr.length&&out.length<500;mi++){var it=arr[mi];if(!it||typeof it!=="object")continue;var name=truncateImportString(it.name!=null?it.name:"",FL_FAV_NAME_MAX_LEN).trim();if(!name)continue;out.push({name:name,protein:clampImportNumber(it.protein,0,FL_IMPORT_NUM_MAX),fat:clampImportNumber(it.fat,0,FL_IMPORT_NUM_MAX),carbs:clampImportNumber(it.carbs,0,FL_IMPORT_NUM_MAX)})}return out}
 function sanitizeDefaultRulesStr(s){return truncateImportString(s==null?"":String(s),FL_DEFAULT_RULES_MAX_LEN)}
@@ -758,10 +770,13 @@ function MetricsTab(p){
 var _range=useState(30),range=_range[0],setRange=_range[1];
 var allDays=p.allDays,today=todayStr();
 var cutoff=addDays(today,-range+1);
+var activeFields=(p.settings&&p.settings.metricsFields&&p.settings.metricsFields.length)?p.settings.metricsFields:DEFAULT_METRICS_FIELDS;
+var fieldDefs=ALL_METRICS_FIELDS.filter(function(f){return activeFields.indexOf(f.key)>=0});
 var allMetricsDates=Object.keys(allDays).filter(function(d){return allDays[d]&&allDays[d].metrics}).sort();
 var latestDate=allMetricsDates.length?allMetricsDates[allMetricsDates.length-1]:null;
 var latestMetrics=latestDate?allDays[latestDate].metrics:null;
 var chartData=allMetricsDates.filter(function(d){return d>=cutoff}).map(function(d){var m=allDays[d].metrics;return{date:d,weight:m.weight||null,bodyFat:m.bodyFat||null,muscle:m.muscle||null}});
+var FIELD_COLORS={"weight":"var(--blue)","bmi":"var(--blue)","bodyFat":"var(--teal)","bodyWater":"var(--teal)","protein":"var(--amber)","fatMass":"var(--amber)","boneMass":"var(--plum)","muscle":"var(--plum)","bmr":"var(--accent)"};
 var pillBtn=function(active){return{padding:"8px 14px",border:"none",fontSize:12,fontWeight:600,borderRadius:"var(--radius-xs)",cursor:"pointer",background:active?"var(--accent)":"var(--card-alt)",color:active?"#fff":"var(--text-sec)",transition:"all .2s",WebkitTapHighlightColor:"transparent",whiteSpace:"nowrap"}};
 return h("div",{style:{padding:"0 16px 16px"}},
 latestMetrics?h("div",{className:"fade-up",style:A({},S.card,{marginBottom:12})},
@@ -769,16 +784,14 @@ h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center
 h("span",{style:{fontSize:15,fontWeight:700,color:"var(--text)"}},"最新體態"),
 h("span",{style:{fontSize:11,color:"var(--text-ter)"}},latestDate===today?"今天記錄":"上次："+latestDate.slice(5).replace("-","/")),
 h("button",{onClick:function(){p.onEdit(latestDate)},style:A({},S.btn("var(--card-alt)","var(--text-sec)","1px solid var(--border)"),{minHeight:30,padding:"0 12px",borderRadius:"var(--radius-xs)",fontSize:12})},"編輯")),
-h("div",{style:{display:"flex",gap:0}},
-[latestMetrics.weight!=null&&latestMetrics.weight>0?["體重","var(--blue)",latestMetrics.weight,"kg"]:null,
-latestMetrics.bodyFat!=null&&latestMetrics.bodyFat>0?["體脂率","var(--teal)",latestMetrics.bodyFat,"%"]:null,
-latestMetrics.muscle!=null&&latestMetrics.muscle>0?["肌肉量","var(--plum)",latestMetrics.muscle,"kg"]:null].filter(Boolean).map(function(x,i,arr){return h("div",{key:x[0],style:{flex:1,textAlign:"center",padding:"8px 0",borderRight:i<arr.length-1?"1px solid var(--border-light)":"none"}},
-h("div",{style:{fontSize:26,fontWeight:800,color:x[1],fontVariantNumeric:"tabular-nums",lineHeight:1}},x[2],h("span",{style:{fontSize:11,fontWeight:400,marginLeft:1}},x[3])),
-h("div",{style:{fontSize:10,color:"var(--text-ter)",marginTop:3}},x[0]))}))
-):h("div",{className:"fade-up",style:A({},S.cardFlat,{padding:"28px 0",textAlign:"center",marginBottom:12})},
+h("div",{style:{display:"flex",flexWrap:"wrap",gap:0}},
+fieldDefs.filter(function(f){return latestMetrics[f.key]!=null&&latestMetrics[f.key]>0}).map(function(f,i,arr){return h("div",{key:f.key,style:{flex:"1 1 30%",textAlign:"center",padding:"8px 4px",borderRight:(i+1)%3!==0&&i<arr.length-1?"1px solid var(--border-light)":"none",borderBottom:i<arr.length-3?"1px solid var(--border-light)":"none"}},
+h("div",{style:{fontSize:20,fontWeight:800,color:FIELD_COLORS[f.key]||"var(--text)",fontVariantNumeric:"tabular-nums",lineHeight:1}},latestMetrics[f.key],h("span",{style:{fontSize:10,fontWeight:400,marginLeft:1}},f.unit)),
+h("div",{style:{fontSize:10,color:"var(--text-ter)",marginTop:3}},f.label))})
+)):h("div",{className:"fade-up",style:A({},S.cardFlat,{padding:"28px 0",textAlign:"center",marginBottom:12})},
 h("div",{style:{fontSize:28,marginBottom:8}},"📏"),
 h("div",{style:{fontSize:15,fontWeight:700,color:"var(--text)",marginBottom:6}},"尚無體態紀錄"),
-h("div",{style:{fontSize:13,color:"var(--text-ter)",marginBottom:0}},"開始記錄體重、體脂率和肌肉量")),
+h("div",{style:{fontSize:13,color:"var(--text-ter)",marginBottom:0}},"開始記錄體態數據")),
 h("button",{onClick:function(){p.onAdd(today)},style:A({},S.btn(),{width:"100%",minHeight:46,borderRadius:"var(--radius-sm)",fontSize:14,fontWeight:700,marginBottom:16,boxShadow:"0 4px 16px rgba(196,93,44,0.2)"})},"📏 記錄今日體態"),
 allMetricsDates.length>=2&&h("div",{className:"fade-up",style:A({},S.card,{marginBottom:12})},
 h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}},
@@ -787,40 +800,36 @@ h("div",{style:{display:"flex",gap:4,flexShrink:0}},[7,30,90].map(function(r){re
 h(MetricsChart,{data:chartData,range:range})),
 allMetricsDates.length>0&&h("div",{style:A({},S.card,{padding:0,overflow:"hidden"})},
 h("div",{style:{padding:"14px 16px 10px"}},h("span",{style:{fontSize:14,fontWeight:700,color:"var(--text)"}},"歷史紀錄")),
-allMetricsDates.slice().reverse().slice(0,20).map(function(d,i,arr){var m=allDays[d].metrics;return h("button",{key:d,onClick:function(){p.onEdit(d)},style:{display:"flex",justifyContent:"space-between",alignItems:"center",width:"100%",padding:"10px 16px",background:"none",border:"none",borderBottom:i<arr.length-1?"1px solid var(--border-light)":"none",cursor:"pointer",fontFamily:"inherit",WebkitTapHighlightColor:"transparent"}},
+allMetricsDates.slice().reverse().slice(0,20).map(function(d,i,arr){var m=allDays[d].metrics;
+var shownFields=fieldDefs.filter(function(f){return m[f.key]>0}).slice(0,3);
+return h("button",{key:d,onClick:function(){p.onEdit(d)},style:{display:"flex",justifyContent:"space-between",alignItems:"center",width:"100%",padding:"10px 16px",background:"none",border:"none",borderBottom:i<arr.length-1?"1px solid var(--border-light)":"none",cursor:"pointer",fontFamily:"inherit",WebkitTapHighlightColor:"transparent"}},
 h("div",{style:{textAlign:"left"}},h("div",{style:{fontWeight:600,fontSize:13,color:"var(--text)"}},d===today?"今天":d.slice(5).replace("-","/")),h("div",{style:{fontSize:11,color:"var(--text-ter)",marginTop:1}},"（",weekday(d),"）")),
-h("div",{style:{display:"flex",gap:10,alignItems:"center"}},
-m.weight>0&&h("span",{style:{fontSize:13,fontWeight:700,color:"var(--blue)",fontVariantNumeric:"tabular-nums"}},m.weight,"kg"),
-m.bodyFat>0&&h("span",{style:{fontSize:13,fontWeight:700,color:"var(--teal)",fontVariantNumeric:"tabular-nums"}},m.bodyFat,"%"),
-m.muscle>0&&h("span",{style:{fontSize:13,fontWeight:700,color:"var(--plum)",fontVariantNumeric:"tabular-nums"}},m.muscle,"kg"),
+h("div",{style:{display:"flex",gap:8,alignItems:"center"}},
+shownFields.map(function(f){return h("span",{key:f.key,style:{fontSize:12,fontWeight:700,color:FIELD_COLORS[f.key]||"var(--text)",fontVariantNumeric:"tabular-nums"}},m[f.key],f.unit)}),
 h("span",{style:{fontSize:13,color:"var(--text-ter)"}},"›")))})));
 }
 
 function MetricsSheet(p){
+var activeFields=(p.settings&&p.settings.metricsFields&&p.settings.metricsFields.length)?p.settings.metricsFields:DEFAULT_METRICS_FIELDS;
+var fieldDefs=ALL_METRICS_FIELDS.filter(function(f){return activeFields.indexOf(f.key)>=0});
 var existingMetrics=(p.allDays&&p.allDays[p.defaultDate]&&p.allDays[p.defaultDate].metrics)||null;
 var _d=useState(p.defaultDate),date=_d[0],setDate=_d[1];
-var _w=useState(existingMetrics&&existingMetrics.weight>0?String(existingMetrics.weight):""),weightVal=_w[0],setWeightVal=_w[1];
-var _bf=useState(existingMetrics&&existingMetrics.bodyFat>0?String(existingMetrics.bodyFat):""),bodyFatVal=_bf[0],setBodyFatVal=_bf[1];
-var _mu=useState(existingMetrics&&existingMetrics.muscle>0?String(existingMetrics.muscle):""),muscleVal=_mu[0],setMuscleVal=_mu[1];
-var _nt=useState(existingMetrics&&existingMetrics.note?existingMetrics.note:""),noteVal=_nt[0],setNoteVal=_nt[1];
+var initVals=function(m){var v={};ALL_METRICS_FIELDS.forEach(function(f){v[f.key]=m&&m[f.key]>0?String(m[f.key]):"";});v.note=m&&m.note?m.note:"";return v};
+var _v=useState(initVals(existingMetrics)),vals=_v[0],setVals=_v[1];
 var _busy=useState(false),busy=_busy[0],setBusy=_busy[1];
 useEffect(function(){
 var m=(p.allDays&&p.allDays[date]&&p.allDays[date].metrics)||null;
-setWeightVal(m&&m.weight>0?String(m.weight):"");
-setBodyFatVal(m&&m.bodyFat>0?String(m.bodyFat):"");
-setMuscleVal(m&&m.muscle>0?String(m.muscle):"");
-setNoteVal(m&&m.note?m.note:"");
+setVals(initVals(m));
 },[date,p.allDays]);
+var setVal=function(k,v){setVals(function(prev){var u={};u[k]=v;return A({},prev,u)})};
 var hasExisting=(p.allDays&&p.allDays[date]&&p.allDays[date].metrics)?true:false;
-var hasInput=+weightVal>0||+bodyFatVal>0||+muscleVal>0;
+var hasInput=fieldDefs.some(function(f){return +vals[f.key]>0});
 var doSave=function(){
 if(!hasInput)return;
 setBusy(true);
 var m={};
-if(+weightVal>0)m.weight=Math.round(+weightVal*10)/10;
-if(+bodyFatVal>0)m.bodyFat=Math.round(+bodyFatVal*10)/10;
-if(+muscleVal>0)m.muscle=Math.round(+muscleVal*10)/10;
-if(noteVal.trim())m.note=noteVal.trim().slice(0,120);
+fieldDefs.forEach(function(f){if(+vals[f.key]>0){var dec=f.step<0.1?100:10;m[f.key]=Math.round(+vals[f.key]*dec)/dec;}});
+if(vals.note&&vals.note.trim())m.note=vals.note.trim().slice(0,120);
 var res=p.onSave(date,m);
 if(res&&typeof res.then==="function")res.then(function(){setBusy(false);p.onClose()}).catch(function(){setBusy(false)});
 else{setBusy(false);p.onClose()}
@@ -832,14 +841,17 @@ var res=p.onSave(date,null);
 if(res&&typeof res.then==="function")res.then(function(){p.onClose()}).catch(function(){});
 else p.onClose();
 };
+var rows=[];
+for(var i=0;i<fieldDefs.length;i+=3){rows.push(fieldDefs.slice(i,i+3));}
 return h("div",{className:"fade-in",style:S.overlay,onClick:p.onClose},
 h("div",{className:"slide-up",style:S.sheet,onClick:function(e){e.stopPropagation()}},
 h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}},h("div",{style:{fontSize:18,fontWeight:700,fontFamily:"var(--font-display)"}},"記錄體態"),h("button",{onClick:p.onClose,style:A({},S.btn("var(--card-alt)","var(--text-sec)"),{minHeight:32,minWidth:32,padding:0,borderRadius:8,fontSize:15})},"✕")),
 h("div",{style:{marginBottom:16}},h("div",{style:S.label},"日期"),h(DateNav,{date:date,setDate:setDate})),
-h("div",{style:{display:"flex",gap:8,marginBottom:16}},[["weightVal","體重","kg",setWeightVal,0,500],["bodyFatVal","體脂率","%",setBodyFatVal,0,100],["muscleVal","肌肉量","kg",setMuscleVal,0,300]].map(function(x){return h("div",{key:x[0],style:{flex:1}},
-h("div",{style:A({},S.label,{fontSize:10})},x[1]+" "+x[2]),
-h("input",{type:"number",inputMode:"decimal",value:x[0]==="weightVal"?weightVal:x[0]==="bodyFatVal"?bodyFatVal:muscleVal,onChange:function(e){x[3](e.target.value)},placeholder:"—",style:A({},S.input,{padding:"10px 8px",fontSize:18,textAlign:"center",fontWeight:700})}))})),
-h("div",{style:{marginBottom:16}},h("div",{style:S.label},"備註（選填）"),h("input",{type:"text",value:noteVal,onChange:function(e){setNoteVal(e.target.value)},placeholder:"例：早晨空腹測量",maxLength:120,style:S.input})),
+fieldDefs.length===0?h("div",{style:{color:"var(--text-ter)",textAlign:"center",padding:"24px 0",fontSize:14}},"請先到設定 → 體態管理選擇要追蹤的指標"):
+rows.map(function(row,ri){return h("div",{key:ri,style:{display:"flex",gap:8,marginBottom:10}},row.map(function(f){return h("div",{key:f.key,style:{flex:1}},
+h("div",{style:A({},S.label,{fontSize:10})},f.label+(f.unit?" "+f.unit:"")),
+h("input",{type:"number",inputMode:"decimal",value:vals[f.key]||"",onChange:function(e){setVal(f.key,e.target.value)},placeholder:"—",style:A({},S.input,{padding:"10px 6px",fontSize:16,textAlign:"center",fontWeight:700})}))}))}),
+h("div",{style:{marginBottom:16}},h("div",{style:S.label},"備註（選填）"),h("input",{type:"text",value:vals.note||"",onChange:function(e){setVal("note",e.target.value)},placeholder:"例：早晨空腹測量",maxLength:120,style:S.input})),
 h("button",{onClick:doSave,disabled:!hasInput||busy,style:A({},S.btn(!hasInput||busy?"var(--border-light)":"var(--accent)"),{width:"100%",minHeight:52,borderRadius:"var(--radius)",fontSize:16,fontWeight:700,marginBottom:hasExisting?10:0,opacity:(!hasInput||busy)?.5:1,boxShadow:hasInput&&!busy?"0 4px 16px rgba(196,93,44,0.25)":"none"})},"✓ 確認儲存"),
 hasExisting&&h("button",{onClick:doClear,style:A({},S.btn("var(--red-light)","var(--red)","1px solid var(--red-border)"),{width:"100%",minHeight:44,borderRadius:"var(--radius)",fontSize:14})},"🗑 清除此日體態記錄")));
 }
@@ -915,6 +927,27 @@ h("div",{style:{textAlign:"left"}},h("div",{style:{fontWeight:600,fontSize:14,co
 h("div",{style:{textAlign:"right"}},h("div",{style:A({},S.numeric,{fontWeight:700,fontSize:17,color:nt>p.goals.calories?"var(--red)":"var(--teal)"})},nt),h("div",{style:{fontSize:10,color:"var(--text-ter)"}},"淨熱量")))})))
 }
 
+function SettingsSection(p){
+var open=p.open,setOpen=p.setOpen;
+var headerRef=useRef(null);
+var handleClick=function(){
+var willOpen=!open;
+setOpen(willOpen);
+if(willOpen){
+setTimeout(function(){
+if(headerRef.current){
+headerRef.current.scrollIntoView({behavior:"smooth",block:"start"});
+}
+},30);
+}
+};
+return h("div",{style:{borderBottom:"1px solid var(--border-light)"}},
+h("button",{ref:headerRef,onClick:handleClick,style:{display:"flex",justifyContent:"space-between",alignItems:"center",width:"100%",padding:"14px 0",background:"none",border:"none",cursor:"pointer",fontFamily:"inherit",WebkitTapHighlightColor:"transparent"}},
+h("span",{style:{fontSize:14,fontWeight:700,color:"var(--text)",display:"flex",alignItems:"center",gap:8}},p.icon," ",p.title),
+h("span",{style:{fontSize:12,color:"var(--text-ter)",transition:"transform .2s",display:"inline-block",transform:open?"rotate(0deg)":"rotate(-90deg)"}},"▼")),
+open&&h("div",{className:"fade-up",style:{paddingBottom:18}},p.children))
+}
+
 function SettingsSheet(p){
 var _g=useState(A({},p.goals)),g=_g[0],setG=_g[1],_r=useState(p.settings.defaultRules||""),rules=_r[0],setRules=_r[1];
 var _ak=useState(getApiKeySlots()),apiKeys=_ak[0],setApiKeysLocal=_ak[1];
@@ -923,6 +956,8 @@ var _s=useState(false),showRaw=_s[0],setShowRaw=_s[1],iRef=useRef(),jRef=useRef(
 var _gh=useState(false),gdHelp=_gh[0],setGdHelp=_gh[1];
 var _gb=useState(false),gdBusy=_gb[0],setGdBusy=_gb[1];
 var _gsi=useState(function(){return !!gdriveGetToken()}),gdSigned=_gsi[0],setGdSigned=_gsi[1];
+var _op=useState({key:false,goal:false,rule:false,gdrive:false,data:false,fav:false,metrics:false}),openSec=_op[0],setOpenSec=_op[1];
+var toggleSec=function(k){setOpenSec(function(prev){var u={};u[k]=!prev[k];return A({},prev,u)})};
 useEffect(function(){var id=setTimeout(function(){setKeyFieldRo(false)},400);return function(){clearTimeout(id)}},[]);
 var gcal=calcCal(g.protein,g.fat,g.carbs),dc=Object.keys(p.allDays).length;
 var tf=Object.values(p.allDays).reduce(function(s,d){return s+(d.food||[]).length},0);
@@ -936,20 +971,37 @@ var importJSON=function(e){var inp=e.target,file=inp.files&&inp.files[0];if(!fil
 return h("div",{className:"fade-in",style:S.overlay,onClick:p.onClose},
 h("div",{className:"slide-up",style:A({},S.sheet,{maxHeight:"min(95dvh, 95vh)",padding:0}),onClick:function(e){e.stopPropagation()}},
 h("div",{style:{position:"sticky",top:0,background:"var(--card)",padding:"20px 20px 14px",borderBottom:"1px solid var(--border)",borderRadius:"20px 20px 0 0",zIndex:1}},h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center"}},h("div",{style:{fontSize:18,fontWeight:700,fontFamily:"var(--font-display)"}},"設定"),h("button",{onClick:p.onClose,style:A({},S.btn("var(--card-alt)","var(--text-sec)"),{minHeight:32,minWidth:32,padding:0,borderRadius:8,fontSize:15})},"✕"))),
-h("div",{style:{padding:"20px 20px calc(36px + env(safe-area-inset-bottom,12px))"}},
-h("div",{style:{marginBottom:24}},h("div",{style:{fontWeight:700,fontSize:14,marginBottom:4}},"🔑 Gemini API Keys"),
-h("div",{style:{fontSize:12,color:"var(--text-ter)",marginBottom:10}},"免費申請：",h("a",{href:"https://aistudio.google.com/apikey",target:"_blank",rel:"noopener",style:{color:"var(--blue)",textDecoration:"underline"}},"Google AI Studio")),
-[0,1,2].map(function(i){return h("input",{key:"ak_"+i,type:"password",name:"fitlog_gemini_key_"+(i+1),autoComplete:"new-password","data-lpignore":"true","data-1p-ignore":"true","data-form-type":"other",value:apiKeys[i]||"",readOnly:keyFieldRo,onFocus:function(){setKeyFieldRo(false)},onChange:function(e){var v=e.target.value;setApiKeysLocal(function(prev){var next=(prev||[]).slice(0,3);while(next.length<3)next.push("");next[i]=v;return next})},placeholder:"輸入 Gemini API Key "+(i+1),style:A({},S.input,{marginBottom:i===2?10:8})})}),
-h("button",{onClick:function(){var slots=[];for(var i=0;i<3;i++)slots.push(normalizeApiKey(apiKeys[i]||""));setApiKeys(slots);setApiKeysLocal(slots);if(p.onApiKeySaved)p.onApiKeySaved();p.showToast("✅ API Keys 已儲存")},style:A({},S.btn(),{width:"100%",minHeight:44,borderRadius:"var(--radius-sm)",fontSize:14})},"儲存 API Keys")),
-h("div",{style:{fontSize:11,color:"var(--text-ter)",lineHeight:1.55,marginTop:10,padding:"10px 12px",background:"var(--card-alt)",borderRadius:"var(--radius-xs)",border:"1px solid var(--border-light)"}},"🔒 ",h("b",{style:{color:"var(--text)"}},"隱私說明：")," Key 只存在你這台裝置的瀏覽器（localStorage），不會上傳到 FitLog 伺服器（本專案也沒有後端）。手機解鎖給別人、或有人能開發者工具／看見螢幕時，仍有外洩可能；Google 網域限制可限制「別的網站」亂用你的 Key，但防不了本機被讀取。",h("br"),h("br"),"建議在 ",h("a",{href:"https://aistudio.google.com/apikey",target:"_blank",rel:"noopener",style:{color:"var(--blue)"}},"Google AI Studio")," 為 Key 設定「",h("b",null,"只允許 Generative Language API"),"」並加上「",h("b",null,"HTTP 網域限制"),"」：白名單必須包含你實際開啟本站的網址（例如 ",h("code",{style:{fontSize:10,wordBreak:"break-all"}},location.origin+"/*"),"）。只填 localhost 時，手機開 GitHub Pages 會被 Google 拒絕並顯示 API key not valid。"),
-h("div",{style:{marginBottom:24}},h("div",{style:{fontWeight:700,fontSize:14,marginBottom:12}},"🎯 每日目標"),
+h("div",{style:{padding:"0 20px calc(36px + env(safe-area-inset-bottom,12px))"}},
+
+h(SettingsSection,{icon:"⭐",title:"常用食物",open:openSec.fav,setOpen:function(v){setOpenSec(function(prev){return A({},prev,{fav:v})})}},
+h("div",{style:{fontSize:12,color:"var(--text-ter)",marginBottom:10}},"記錄常用食物，可透過「⚡常用」快速新增到每日記錄"),
+h(FavoritesTab,{favorites:p.favorites,onSave:p.onSaveFavorites,settings:p.settings,date:null,showToast:p.showToast,onAddToDay:null})),
+
+h(SettingsSection,{icon:"📏",title:"體態管理",open:openSec.metrics,setOpen:function(v){setOpenSec(function(prev){return A({},prev,{metrics:v})})}},
+h("div",{style:{fontSize:12,color:"var(--text-ter)",marginBottom:14}},"選擇要追蹤的指標，記錄體態時只會顯示勾選的欄位"),
+h("div",{style:{display:"flex",flexWrap:"wrap",gap:8}},
+ALL_METRICS_FIELDS.map(function(f){
+var active=(p.settings.metricsFields||DEFAULT_METRICS_FIELDS).indexOf(f.key)>=0;
+return h("button",{key:f.key,onClick:function(){
+var cur=p.settings.metricsFields||DEFAULT_METRICS_FIELDS;
+var next=active?cur.filter(function(k){return k!==f.key}):[].concat(cur,[f.key]);
+p.onSaveSettings(A({},p.settings,{metricsFields:next})).catch(function(){});
+},style:{display:"flex",alignItems:"center",gap:6,padding:"8px 14px",border:active?"1.5px solid var(--accent)":"1.5px solid var(--border)",borderRadius:"var(--radius-sm)",background:active?"var(--accent-light)":"var(--card-alt)",color:active?"var(--accent)":"var(--text-sec)",fontSize:13,fontWeight:active?700:500,cursor:"pointer",WebkitTapHighlightColor:"transparent",transition:"all .2s"}},
+h("span",{style:{fontSize:15,lineHeight:1}},active?"✓":""),
+f.label,
+f.unit?h("span",{style:{fontSize:10,opacity:.7}},f.unit):"")}))),
+
+h(SettingsSection,{icon:"🎯",title:"每日目標",open:openSec.goal,setOpen:function(v){setOpenSec(function(prev){return A({},prev,{goal:v})})}},
 h("div",{style:{display:"flex",gap:8,marginBottom:10}},[["protein","蛋白質 g"],["fat","脂肪 g"],["carbs","碳水 g"]].map(function(x){return h("div",{key:x[0],style:{flex:1}},h("div",{style:A({},S.label,{fontSize:10})},x[1]),h("input",{type:"number",inputMode:"decimal",value:g[x[0]],onChange:function(e){sg(x[0],e.target.value)},style:A({},S.input,{padding:"9px 8px",fontSize:16,textAlign:"center"})}))})),
 h("div",{style:{background:"var(--accent-light)",borderRadius:"var(--radius-xs)",padding:"10px 14px",fontSize:13,color:"var(--accent)",fontWeight:500,textAlign:"center",marginBottom:10,border:"1px solid var(--accent-border)"}},"每日熱量 = "+(g.protein||0)+"×4 + "+(g.fat||0)+"×9 + "+(g.carbs||0)+"×4 = ",h("b",null,gcal+" kcal")),
 h("button",{onClick:function(){p.onSaveGoals({protein:+g.protein||0,fat:+g.fat||0,carbs:+g.carbs||0,calories:gcal}).catch(function(){})},style:A({},S.btn(),{width:"100%",minHeight:44,borderRadius:"var(--radius-sm)",fontSize:14})},"儲存目標")),
-h("div",{style:{marginBottom:24}},h("div",{style:{fontWeight:700,fontSize:14,marginBottom:4}},"📋 預設估算規則"),h("div",{style:{fontSize:12,color:"var(--text-ter)",marginBottom:10}},"AI 分析食物時會自動套用"),
+
+h(SettingsSection,{icon:"📋",title:"預設估算規則",open:openSec.rule,setOpen:function(v){setOpenSec(function(prev){return A({},prev,{rule:v})})}},
+h("div",{style:{fontSize:12,color:"var(--text-ter)",marginBottom:10}},"AI 分析食物時會自動套用"),
 h("textarea",{value:rules,onChange:function(e){setRules(e.target.value)},placeholder:"例：飲料預設手搖杯大杯700ml",style:A({},S.input,{minHeight:160,resize:"vertical"})}),
 h("button",{onClick:function(){p.onSaveSettings(A({},p.settings,{defaultRules:rules})).catch(function(){})},style:A({},S.btn(),{width:"100%",minHeight:44,borderRadius:"var(--radius-sm)",marginTop:10})},"儲存規則")),
-h("div",{style:{marginBottom:24}},h("div",{style:{fontWeight:700,fontSize:14,marginBottom:8}},"☁️ Google Drive 雲端備份"),
+
+h(SettingsSection,{icon:"☁️",title:"Google Drive 雲端備份",open:openSec.gdrive,setOpen:function(v){setOpenSec(function(prev){return A({},prev,{gdrive:v})})}},
 h("div",{style:{fontSize:12,color:"var(--text-ter)",marginBottom:10,lineHeight:1.5}},"備份檔存在你 Google 帳號的「應用程式專屬資料夾」（一般檔案列表看不到）。OAuth token 不寫入本機，關閉或滑掉 App 後會清空記憶體。為避免一進 App 就跳出 Google 畫面，**不會**在啟動或僅開啟本頁時自動連線授權；請按「登入 Google」或「立即備份／從雲端還原」時再登入。"),
 !FL_GDRIVE_CLIENT_ID||!String(FL_GDRIVE_CLIENT_ID).trim()?h("div",{style:{fontSize:12,color:"var(--amber)",marginBottom:10,padding:"10px 12px",background:"var(--amber-light)",borderRadius:"var(--radius-xs)",border:"1px solid var(--amber-border)"}},"尚未設定 OAuth Client ID：請編輯 ",h("code",{style:{fontSize:11}},"index.html")," 頂端的 ",h("code",{style:{fontSize:11}},"FL_GDRIVE_CLIENT_ID"),"（見下方展開說明）。"):null,
 h("div",{style:{fontSize:12,color:"var(--text-sec)",marginBottom:8}},"上次備份：",h("b",{style:{color:"var(--text)"}},formatBackupDisplay(p.lastGdriveIso))),
@@ -969,7 +1021,14 @@ h("li",{key:6},'建立後複製「用戶端 ID」，貼到 ',h("code",{style:{fo
 h("li",{key:7},'Fork 專案自架時：須在 GCP 為「你的網域」新增相同的 JavaScript 來源，否則 OAuth 會被拒。')
 ]),
 h("div",{style:{marginTop:10,fontSize:10,color:"var(--text-ter)"}},"Client ID 可公開；真正限制誰能用的是 GCP 裡的授權來源白名單。"))),
-h("div",{style:{marginBottom:24}},h("div",{style:{fontWeight:700,fontSize:14,marginBottom:12}},"💾 資料管理"),
+
+h(SettingsSection,{icon:"🔑",title:"Gemini API Keys",open:openSec.key,setOpen:function(v){setOpenSec(function(prev){return A({},prev,{key:v})})}},
+h("div",{style:{fontSize:12,color:"var(--text-ter)",marginBottom:10}},"免費申請：",h("a",{href:"https://aistudio.google.com/apikey",target:"_blank",rel:"noopener",style:{color:"var(--blue)",textDecoration:"underline"}},"Google AI Studio")),
+[0,1,2].map(function(i){return h("input",{key:"ak_"+i,type:"password",name:"fitlog_gemini_key_"+(i+1),autoComplete:"new-password","data-lpignore":"true","data-1p-ignore":"true","data-form-type":"other",value:apiKeys[i]||"",readOnly:keyFieldRo,onFocus:function(){setKeyFieldRo(false)},onChange:function(e){var v=e.target.value;setApiKeysLocal(function(prev){var next=(prev||[]).slice(0,3);while(next.length<3)next.push("");next[i]=v;return next})},placeholder:"輸入 Gemini API Key "+(i+1),style:A({},S.input,{marginBottom:i===2?10:8})})}),
+h("button",{onClick:function(){var slots=[];for(var i=0;i<3;i++)slots.push(normalizeApiKey(apiKeys[i]||""));setApiKeys(slots);setApiKeysLocal(slots);if(p.onApiKeySaved)p.onApiKeySaved();p.showToast("✅ API Keys 已儲存")},style:A({},S.btn(),{width:"100%",minHeight:44,borderRadius:"var(--radius-sm)",fontSize:14})},"儲存 API Keys"),
+h("div",{style:{fontSize:11,color:"var(--text-ter)",lineHeight:1.55,marginTop:10,padding:"10px 12px",background:"var(--card-alt)",borderRadius:"var(--radius-xs)",border:"1px solid var(--border-light)"}},"🔒 ",h("b",{style:{color:"var(--text)"}},"隱私說明：")," Key 只存在你這台裝置的瀏覽器（localStorage），不會上傳到 FitLog 伺服器（本專案也沒有後端）。手機解鎖給別人、或有人能開發者工具／看見螢幕時，仍有外洩可能；Google 網域限制可限制「別的網站」亂用你的 Key，但防不了本機被讀取。",h("br"),h("br"),"建議在 ",h("a",{href:"https://aistudio.google.com/apikey",target:"_blank",rel:"noopener",style:{color:"var(--blue)"}},"Google AI Studio")," 為 Key 設定「",h("b",null,"只允許 Generative Language API"),"」並加上「",h("b",null,"HTTP 網域限制"),"」：白名單必須包含你實際開啟本站的網址（例如 ",h("code",{style:{fontSize:10,wordBreak:"break-all"}},location.origin+"/*"),"）。只填 localhost 時，手機開 GitHub Pages 會被 Google 拒絕並顯示 API key not valid。")),
+
+h(SettingsSection,{icon:"💾",title:"資料管理",open:openSec.data,setOpen:function(v){setOpenSec(function(prev){return A({},prev,{data:v})})}},
 h("div",{style:{display:"flex",gap:8,marginBottom:12}},[["📅",dc,"天"],["🍽",tf,"飲食"],["🏃",te,"運動"],["⭐",p.favorites.length,"常用"]].map(function(x){return h("div",{key:x[2],style:{flex:1,textAlign:"center",background:"var(--card-alt)",borderRadius:"var(--radius-xs)",padding:"10px 4px"}},h("div",{style:{fontSize:10}},x[0]),h("div",{style:{fontSize:18,fontWeight:800,color:"var(--text)",fontVariantNumeric:"tabular-nums"}},x[1]),h("div",{style:{fontSize:10,color:"var(--text-ter)"}},x[2]))})),
 h("div",{style:{fontSize:11,color:"var(--text-ter)",marginBottom:10,lineHeight:1.45,padding:"10px 12px",background:"var(--blue-light)",borderRadius:"var(--radius-xs)",border:"1px solid var(--blue-border)"}},"匯入前會自動清洗：僅接受 YYYY-MM-DD 日期、單筆描述 ≤ "+FL_DESC_MAX_LEN+" 字；單次最多 "+FL_IMPORT_MAX_DATES+" 天；總筆數上限 "+FL_IMPORT_MAX_ENTRIES+"；營養／熱量數值會限制在合理範圍內。可疑鍵名與異常欄位會略過或截斷。"),
 h("div",{style:{display:"flex",gap:8,marginBottom:10}},h("button",{onClick:exportCSV,style:A({},S.btn("var(--blue)"),{flex:1,minHeight:44,borderRadius:"var(--radius-sm)",fontSize:14})},"📤 匯出 CSV"),h("input",{ref:iRef,type:"file",accept:".csv",onChange:importCSV,style:{display:"none"}}),h("button",{onClick:function(){iRef.current&&iRef.current.click()},style:A({},S.btn("var(--amber-light)","var(--amber)","1.5px solid var(--amber-border)"),{flex:1,minHeight:44,borderRadius:"var(--radius-sm)",fontSize:14})},"📥 匯入 CSV")),
@@ -977,11 +1036,10 @@ h("div",{style:{display:"flex",gap:8,marginBottom:10}},h("button",{onClick:expor
 h("button",{onClick:function(){setShowRaw(!showRaw)},style:A({},S.btn("var(--card-alt)","var(--text-sec)","1px solid var(--border)"),{width:"100%",minHeight:40,borderRadius:"var(--radius-xs)",fontSize:13,marginTop:4})},showRaw?"隱藏原始資料":"🔍 檢視原始資料"),
 h("button",{onClick:async function(){p.showToast("正在清除 PWA 快取…");try{if(window.caches&&caches.keys){var ks=await caches.keys();await Promise.all(ks.map(function(k){return caches.delete(k)}))}if(navigator.serviceWorker&&navigator.serviceWorker.getRegistrations){var regs=await navigator.serviceWorker.getRegistrations();await Promise.all(regs.map(function(r){return r.unregister()}))}}catch(e){}setTimeout(function(){location.reload()},500)},style:A({},S.btn("var(--card-alt)","var(--text-sec)","1px solid var(--border)"),{width:"100%",minHeight:40,borderRadius:"var(--radius-xs)",fontSize:13,marginTop:8})},"🔄 清除 PWA 快取並重新載入"),
 showRaw&&h("div",{className:"fade-up",style:{maxHeight:300,overflowY:"auto",marginTop:10,background:"var(--bg)",borderRadius:"var(--radius-xs)",padding:14,border:"1px solid var(--border)"}},Object.keys(p.allDays).sort().reverse().map(function(d){var day=p.allDays[d];return h("div",{key:d,style:{marginBottom:12}},h("div",{style:{fontWeight:700,fontSize:12,color:"var(--accent)",marginBottom:4}},d,"（",weekday(d),"）"),(day.food||[]).map(function(f){var fs=normalizeAiSummary(f.aiSummary);return h("div",{key:f.id,style:{fontSize:11,color:"var(--text-sec)",padding:"2px 0 2px 12px"}},"🍽 ",fs?h("span",null,h("b",{style:{color:"var(--text)"}},"摘要 "),fs," · "):"",f.desc," — P:",f.protein," F:",f.fat," C:",f.carbs," = ",calcCal(f.protein,f.fat,f.carbs),"kcal",f.time?" ("+f.time+")":"")}),(day.exercise||[]).map(function(e){var es=normalizeAiSummary(e.aiSummary);return h("div",{key:e.id,style:{fontSize:11,color:"var(--text-sec)",padding:"2px 0 2px 12px"}},"🏃 ",es?h("span",null,h("b",{style:{color:"var(--text)"}},"摘要 "),es," · "):"",e.desc," — ",e.calories,"kcal",e.duration?" "+e.duration+"min":"",e.time?" ("+e.time+")":"")}))}),dc===0&&h("div",{style:{color:"var(--text-ter)",fontSize:13,textAlign:"center",padding:"14px 0"}},"無資料"))),
-h("div",{style:{marginBottom:24}},h("div",{style:{fontWeight:700,fontSize:14,marginBottom:4}},"⭐ 常用食物"),
-h("div",{style:{fontSize:12,color:"var(--text-ter)",marginBottom:10}},"記錄常用食物，可透過「⚡常用」快速新增到每日記錄"),
-h(FavoritesTab,{favorites:p.favorites,onSave:p.onSaveFavorites,settings:p.settings,date:null,showToast:p.showToast,onAddToDay:null})),
-h("button",{onClick:p.onClose,style:A({},S.btn("var(--card-alt)","var(--text-sec)","1px solid var(--border)"),{width:"100%",minHeight:44,borderRadius:"var(--radius-sm)"})},"關閉"))))
-}
+
+
+h("button",{onClick:p.onClose,style:A({},S.btn("var(--card-alt)","var(--text-sec)","1px solid var(--border)"),{width:"100%",minHeight:44,borderRadius:"var(--radius-sm)",marginTop:16})},"關閉"))))}
+
 
 function ApiKeyBanner(p){
 var _t=useState(0),bump=_t[1];
@@ -1324,7 +1382,7 @@ h("div",{style:{flex:1,textAlign:"center",padding:"8px 0"}},h("div",{style:{font
 
 tab==="dashboard"&&h(DashboardTab,{allDays:allDays,goals:goals}),
 tab==="history"&&h(HistoryTab,{allDays:allDays,goals:goals,onSelect:function(d){setDate(d);setTab("records")}}),
-tab==="metrics"&&h(MetricsTab,{allDays:allDays,onAdd:function(d){setMetricsSheetDate(d);openSheet("metrics")},onEdit:function(d){setMetricsSheetDate(d);openSheet("metrics")}}))),
+tab==="metrics"&&h(MetricsTab,{allDays:allDays,settings:settings,onAdd:function(d){setMetricsSheetDate(d);openSheet("metrics")},onEdit:function(d){setMetricsSheetDate(d);openSheet("metrics")}}))),
 
 !kbOpen&&!sheet&&h("div",{style:{flexShrink:0,background:"var(--card)",borderTop:"1px solid var(--border)",padding:"8px 12px calc(12px + env(safe-area-inset-bottom, 0px))",boxShadow:"0 -4px 16px rgba(44,37,24,.06)"}},
 h("div",{style:{display:"flex",gap:6}},
@@ -1335,7 +1393,7 @@ h("button",{style:A({},S.btn(),{flex:1,minHeight:46,borderRadius:"var(--radius-s
 sheet==="food"&&h(FoodSheet,{defaultDate:date,settings:settings,onAdd:addFood,onClose:function(){openSheet(null)}}),
 sheet==="exercise"&&h(ExerciseSheet,{defaultDate:date,onAdd:addExercise,onClose:function(){openSheet(null)}}),
 sheet==="quickadd"&&h(QuickAddSheet,{favorites:favorites,date:date,onAdd:async function(fav){try{await addFood(date,{id:uid(),desc:fav.name,protein:fav.protein,fat:fav.fat,carbs:fav.carbs,time:new Date().toLocaleTimeString("zh-TW",{hour:"2-digit",minute:"2-digit"}),aiSummary:fav.name});openSheet(null);showToast("已加入 "+fav.name)}catch(unused){}},onReorder:saveFavs,onClose:function(){openSheet(null)}}),
-sheet==="metrics"&&h(MetricsSheet,{defaultDate:metricsSheetDate,allDays:allDays,onSave:function(d,m){var res=saveMetrics(d,m);if(res&&typeof res.then==="function")res.then(function(){if(d!==todayStr())showToast("已儲存 "+d+" 的體態記錄")}).catch(function(){});return res},onClose:function(){openSheet(null)}}),
+sheet==="metrics"&&h(MetricsSheet,{defaultDate:metricsSheetDate,allDays:allDays,settings:settings,onSave:function(d,m){var res=saveMetrics(d,m);if(res&&typeof res.then==="function")res.then(function(){if(d!==todayStr())showToast("已儲存 "+d+" 的體態記錄")}).catch(function(){});return res},onClose:function(){openSheet(null)}}),
 sheet==="settings"&&h(SettingsSheet,{goals:goals,settings:settings,onSaveGoals:saveGoals,onSaveSettings:saveSett,onSaveFavorites:saveFavs,onClose:function(){openSheet(null)},allDays:allDays,favorites:favorites,onImport:handleImport,showToast:showToast,onApiKeySaved:function(){localStorage.removeItem("fl_apikey_banner_dismissed");bumpApiKeyEpoch(function(x){return x+1})},lastGdriveIso:lastGdriveBackupIso,onSyncGdriveLastBackup:syncLastGdriveBackupFromCloud,onGdriveBackup:doGdriveBackup,onGdriveRestore:doGdriveRestore}),
 undoItem&&h("div",{className:"fade-in",style:{position:"fixed",left:16,right:16,bottom:100,maxWidth:448,margin:"0 auto",zIndex:205,background:"var(--text)",color:"#fff",borderRadius:"var(--radius-sm)",padding:"10px 14px",fontSize:13,fontWeight:500,boxShadow:"var(--shadow-lg)",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}},
 h("span",{style:{flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},"已刪除 ",undoItem.desc),
