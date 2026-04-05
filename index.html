@@ -515,7 +515,7 @@ cardFlat:{background:"var(--card-alt)",borderRadius:"var(--radius)",padding:16,m
 btn:function(bg,co,bd){return{background:bg||"var(--accent)",color:co||"#fff",border:bd||"none",borderRadius:"var(--radius-sm)",fontWeight:600,fontSize:14,cursor:"pointer",minHeight:44,display:"flex",alignItems:"center",justifyContent:"center",gap:6,padding:"0 16px",transition:"all .2s cubic-bezier(.22,.61,.36,1)",WebkitTapHighlightColor:"transparent",letterSpacing:"0.01em"}},
 input:{width:"100%",border:"1.5px solid var(--border)",borderRadius:"var(--radius-sm)",padding:"11px 14px",fontSize:16,outline:"none",boxSizing:"border-box",background:"var(--card)",transition:"border-color .2s",letterSpacing:"0.01em"},
 label:{fontSize:11,color:"var(--text-sec)",fontWeight:600,marginBottom:5,display:"block",letterSpacing:"0.06em",textTransform:"uppercase"},
-overlay:{position:"fixed",inset:0,background:"rgba(44,37,24,0.35)",backdropFilter:"blur(8px)",WebkitBackdropFilter:"blur(8px)",zIndex:50,display:"flex",alignItems:"flex-end",transform:"translateY(var(--vv-offset-top,0px))"},
+overlay:{position:"fixed",inset:0,background:"rgba(44,37,24,0.35)",backdropFilter:"blur(8px)",WebkitBackdropFilter:"blur(8px)",zIndex:50,display:"flex",alignItems:"flex-end"},
 sheet:{background:"var(--card)",borderRadius:"20px 20px 0 0",width:"100%",maxHeight:"min(92dvh, 92vh)",overflowY:"auto",overscrollBehavior:"contain",padding:"24px 20px calc(36px + env(safe-area-inset-bottom,12px) + var(--keyboard-inset,0px))",WebkitOverflowScrolling:"touch",boxShadow:"var(--shadow-lg)"},
 toast:{position:"fixed",bottom:100,left:"50%",transform:"translateX(-50%)",background:"var(--text)",color:"#fff",borderRadius:24,padding:"10px 24px",fontSize:13,fontWeight:500,zIndex:200,whiteSpace:"nowrap",boxShadow:"var(--shadow-lg)"},
 tabBtn:function(a){return{flex:1,padding:"10px 0",border:"none",background:"none",fontWeight:a?700:500,fontSize:13,color:a?"var(--accent)":"var(--text-ter)",borderBottom:a?"2.5px solid var(--accent)":"2.5px solid transparent",cursor:"pointer",transition:"all .2s",letterSpacing:"0.02em"}}
@@ -1137,10 +1137,9 @@ var _bsd=useState(function(){try{return sessionStorage.getItem("fl_backup_stale_
 var _sbd=useState(function(){try{return sessionStorage.getItem("fl_storage_warn_dismissed")==="1"}catch(e){return false}}),storageBannerDismissed=_sbd[0],setStorageBannerDismissed=_sbd[1];
 var _ui=useState(null),undoItem=_ui[0],setUndoItem=_ui[1];
 var _msd=useState(todayStr()),metricsSheetDate=_msd[0],setMetricsSheetDate=_msd[1];
-var toastTimerRef=useRef(null),undoTimerRef=useRef(null),sheetOpenedAtRef=useRef(0);
-var sheetRef=useRef(null);
-var openSheet=function(next){if(next!=null)sheetOpenedAtRef.current=Date.now();else sheetOpenedAtRef.current=0;setSheet(next)};
-useLayoutEffect(function(){sheetRef.current=sheet},[sheet]);
+var toastTimerRef=useRef(null),undoTimerRef=useRef(null);
+var openSheet=function(next){setSheet(next)};
+
 var showToast=function(m){if(toastTimerRef.current){clearTimeout(toastTimerRef.current);toastTimerRef.current=null}setToast(m);toastTimerRef.current=setTimeout(function(){toastTimerRef.current=null;setToast(null)},2500)};
 var exportAppJSON=function(){exportBackupJSON({version:1,exportedAt:new Date().toISOString(),allDays:allDays,favorites:favorites,goals:goals,settings:{defaultRules:(settings&&settings.defaultRules)||""}},showToast)};
 var refreshStorageUsage=async function(){try{var u=await getFlStorageUsage();setStorageUsagePct(Math.min(100,Math.round(u.usedBytes/Math.max(u.quotaBytes,1)*100)))}catch(e){}};
@@ -1149,28 +1148,7 @@ var clearUndoTimer=function(){if(undoTimerRef.current){clearTimeout(undoTimerRef
 var scheduleUndoClear=function(){clearUndoTimer();undoTimerRef.current=setTimeout(function(){undoTimerRef.current=null;setUndoItem(null)},5000)};
 
 useEffect(function(){
-var kbTimer=null,scrollTimers=[],activeEl=null,vvAdded=false;
-var tryScrollIntoView=function(el){if(!el||!el.isConnected)return;try{el.scrollIntoView({behavior:"auto",block:"nearest",inline:"nearest"})}catch(unused){}};
-var runScrollIntoView=function(el){requestAnimationFrame(function(){requestAnimationFrame(function(){tryScrollIntoView(el)})})};
-var clearScrollRetries=function(){for(var i=0;i<scrollTimers.length;i++)clearTimeout(scrollTimers[i]);scrollTimers=[]};
-var scheduleScrollRetries=function(el){
-clearScrollRetries();
-if(!el||!el.isConnected)return;
-var opened=sheetOpenedAtRef.current,skew=opened?Date.now()-opened:999999;
-var inSheet=!!(el.closest&&el.closest(".slide-up"));
-var lead=inSheet&&skew<400?400-skew:0;
-scrollTimers.push(setTimeout(function(){runScrollIntoView(el)},lead));
-scrollTimers.push(setTimeout(function(){runScrollIntoView(el)},lead+200));
-};
-var vvScroll=function(){
-if(!window.visualViewport)return;
-var vv=window.visualViewport;
-var kh=Math.max(0,window.innerHeight-vv.height-(vv.offsetTop||0));
-document.documentElement.style.setProperty("--keyboard-inset",kh+"px");
-document.documentElement.style.setProperty("--vv-offset-top",(vv.offsetTop||0)+"px");
-};
-var addVv=function(){if(vvAdded||!window.visualViewport)return;vvAdded=true;window.visualViewport.addEventListener("resize",vvScroll);window.visualViewport.addEventListener("scroll",vvScroll);vvScroll()};
-var removeVv=function(){if(!vvAdded||!window.visualViewport)return;vvAdded=false;window.visualViewport.removeEventListener("resize",vvScroll);window.visualViewport.removeEventListener("scroll",vvScroll);document.documentElement.style.setProperty("--keyboard-inset","0px");document.documentElement.style.setProperty("--vv-offset-top","0px")};
+var kbTimer=null,activeEl=null;
 var onF=function(e){
 var t=e.target;
 if(t.tagName!=="INPUT"&&t.tagName!=="TEXTAREA")return;
@@ -1178,7 +1156,6 @@ if(t.disabled)return;
 if(kbTimer){clearTimeout(kbTimer);kbTimer=null}
 setKbOpen(true);
 activeEl=t;
-if(!sheetRef.current){addVv();scheduleScrollRetries(t);}
 };
 var onB=function(e){
 var t=e.target;
@@ -1194,18 +1171,13 @@ return;
 }
 setKbOpen(false);
 activeEl=null;
-clearScrollRetries();
-if(!sheetRef.current)removeVv();
 },350);
 };
 document.addEventListener("focusin",onF);document.addEventListener("focusout",onB);
 return function(){
 document.removeEventListener("focusin",onF);document.removeEventListener("focusout",onB);
 if(kbTimer)clearTimeout(kbTimer);
-clearScrollRetries();
-removeVv();
 document.documentElement.style.setProperty("--keyboard-inset","0px");
-document.documentElement.style.setProperty("--vv-offset-top","0px");
 };
 },[]);
 
@@ -1213,7 +1185,6 @@ useEffect(function(){
 if(!sheet)return;
 if(!window.visualViewport)return;
 var vv=window.visualViewport;
-document.documentElement.style.setProperty("--vv-offset-top","0px");
 var vvScroll=function(){
 var kh=Math.max(0,window.innerHeight-vv.height-(vv.offsetTop||0));
 document.documentElement.style.setProperty("--keyboard-inset",kh+"px");
@@ -1225,7 +1196,6 @@ return function(){
 vv.removeEventListener("resize",vvScroll);
 vv.removeEventListener("scroll",vvScroll);
 document.documentElement.style.setProperty("--keyboard-inset","0px");
-document.documentElement.style.setProperty("--vv-offset-top","0px");
 };
 },[sheet]);
 
