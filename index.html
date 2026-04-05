@@ -934,7 +934,7 @@ dates.length===0&&h("div",{style:{color:"var(--text-ter)",fontSize:14,textAlign:
 dates.map(function(d){var day=p.allDays[d],fd=day.food||[],ex=day.exercise||[];
 var pr=fd.reduce(function(s,f){return s+(f.protein||0)},0),ink=fd.reduce(function(s,f){return s+calcCal(f.protein,f.fat,f.carbs)},0),bu=ex.reduce(function(s,e){return s+(e.calories||0)},0),nt=ink-bu;
 return h("button",{key:d,onClick:function(){p.onSelect(d)},style:{display:"flex",justifyContent:"space-between",alignItems:"center",width:"100%",padding:"12px 0",background:"none",border:"none",borderBottom:"1px solid var(--border-light)",cursor:"pointer",fontFamily:"inherit"}},
-h("div",{style:{textAlign:"left"}},h("div",{style:{fontWeight:600,fontSize:14,color:"var(--text)"}},d,"（",weekday(d),"）"),h("div",{style:{fontSize:11,color:"var(--text-sec)",marginTop:3}},"飲食 "+fd.length+" 筆 · 蛋白質 "+pr+"g")),
+h("div",{style:{textAlign:"left"}},h("div",{style:{fontWeight:600,fontSize:14,color:"var(--text)"}},d,"（",weekday(d),"）"),h("div",{style:{fontSize:11,color:"var(--text-sec)",marginTop:3}},"飲食 "+fd.length+" 筆 · 蛋白質 "+(+pr||0).toFixed(1)+"g")),
 h("div",{style:{textAlign:"right"}},h("div",{style:A({},S.numeric,{fontWeight:700,fontSize:17,color:nt>p.goals.calories?"var(--red)":"var(--teal)"})},nt),h("div",{style:{fontSize:10,color:"var(--text-ter)"}},"淨熱量")))})))
 }
 
