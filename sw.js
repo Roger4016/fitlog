@@ -1,4 +1,4 @@
-var CACHE = 'fitlog-v25';
+var CACHE = 'fitlog-v26';
 var UPDATE_TYPE = 'safe'; // 'silent' | 'safe' | 'data'
 var URLS = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png'];
 

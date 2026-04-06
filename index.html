@@ -36,7 +36,7 @@ if(!window.React||!window.ReactDOM){
 document.getElementById("root").innerHTML='<div style="padding:24px;font-family:system-ui,-apple-system,Segoe UI,Roboto,Noto Sans TC,sans-serif;color:#2c2518;line-height:1.6"><div style="font-weight:700;margin-bottom:8px">FitLog 載入失敗</div><div>React 套件未載入成功。請重新整理，或檢查網路/擋廣告外掛是否阻擋 cdnjs、unpkg。</div></div>';
 throw new Error("React libraries failed to load");
 }
-var h=React.createElement,useState=React.useState,useEffect=React.useEffect,useLayoutEffect=React.useLayoutEffect||React.useEffect,useRef=React.useRef;
+var h=React.createElement,useState=React.useState,useEffect=React.useEffect,useRef=React.useRef;
 var A=Object.assign;
 var FL_STORAGE_FULL="STORAGE_FULL";
 var FL_LOCALSTORAGE_QUOTA_BYTES=5*1024*1024;
@@ -555,23 +555,8 @@ tabBtn:function(a){return{flex:1,padding:"10px 0",border:"none",background:"none
 };
 
 function BottomSheet(p){
-var _v=useState(false),visible=_v[0],setVisible=_v[1];
 var overlayRef=useRef(null);
 var sheetRef=useRef(null);
-var raf1Ref=useRef(null),raf2Ref=useRef(null);
-useLayoutEffect(function(){
-setVisible(false);
-raf1Ref.current=requestAnimationFrame(function(){
-if(sheetRef.current){void sheetRef.current.offsetHeight;}
-raf2Ref.current=requestAnimationFrame(function(){
-setVisible(true);
-});
-});
-return function(){
-if(raf1Ref.current)cancelAnimationFrame(raf1Ref.current);
-if(raf2Ref.current)cancelAnimationFrame(raf2Ref.current);
-};
-},[]);
 useEffect(function(){
 if(!window.visualViewport)return;
 var vv=window.visualViewport;
@@ -595,18 +580,16 @@ if(ov2)ov2.style.removeProperty("--fl-kb");
 };
 },[]);
 var overlayStyle=A({},S.overlay,{
-opacity:visible?1:0,
-transition:"opacity .25s ease-out"
+animation:"fadeIn .25s ease-out both"
 });
 var sheetStyle=A({},S.sheet,p.sheetStyle||{},{
-transform:visible?"translateY(0)":"translateY(100%)",
-transition:visible?"transform .35s cubic-bezier(.22,.61,.36,1), border-radius .15s ease-out":"none",
-willChange:"transform",
+animation:"slideUp .35s cubic-bezier(.22,.61,.36,1) both",
+transition:"border-radius .15s ease-out",
 marginBottom:"var(--fl-kb, 0px)"
 });
 return h("div",{ref:overlayRef,style:overlayStyle,onClick:p.onOverlayClick||p.onClose},
 h("div",{ref:sheetRef,style:sheetStyle,onClick:function(e){e.stopPropagation()},onTouchMove:p.onTouchMove,onTouchEnd:p.onTouchEnd},
-h("div",{"data-patch":"v9",style:{display:"none"}}),
+h("div",{"data-patch":"v10",style:{display:"none"}}),
 p.children));
 }
 
@@ -1137,7 +1120,7 @@ h("button",{onClick:async function(){p.showToast("正在清除 PWA 快取…");t
 showRaw&&h("div",{className:"fade-up",style:{maxHeight:300,overflowY:"auto",marginTop:10,background:"var(--bg)",borderRadius:"var(--radius-xs)",padding:14,border:"1px solid var(--border)"}},Object.keys(p.allDays).sort().reverse().map(function(d){var day=p.allDays[d];return h("div",{key:d,style:{marginBottom:12}},h("div",{style:{fontWeight:700,fontSize:12,color:"var(--accent)",marginBottom:4}},d,"（",weekday(d),"）"),(day.food||[]).map(function(f){var fs=normalizeAiSummary(f.aiSummary);return h("div",{key:f.id,style:{fontSize:11,color:"var(--text-sec)",padding:"2px 0 2px 12px"}},"🍽 ",fs?h("span",null,h("b",{style:{color:"var(--text)"}},"摘要 "),fs," · "):"",f.desc," — P:",(+f.protein||0).toFixed(1)," F:",(+f.fat||0).toFixed(1)," C:",(+f.carbs||0).toFixed(1)," = ",calcCal(f.protein,f.fat,f.carbs),"kcal",f.time?" ("+f.time+")":"")}),(day.exercise||[]).map(function(e){var es=normalizeAiSummary(e.aiSummary);return h("div",{key:e.id,style:{fontSize:11,color:"var(--text-sec)",padding:"2px 0 2px 12px"}},"🏃 ",es?h("span",null,h("b",{style:{color:"var(--text)"}},"摘要 "),es," · "):"",e.desc," — ",e.calories,"kcal",e.duration?" "+e.duration+"min":"",e.time?" ("+e.time+")":"")}))}),dc===0&&h("div",{style:{color:"var(--text-ter)",fontSize:13,textAlign:"center",padding:"14px 0"}},"無資料"))),
 
 
-h("div",{style:{fontSize:10,color:"var(--text-ter)",textAlign:"center",marginTop:16,paddingTop:12,borderTop:"1px solid var(--border-light)",letterSpacing:"0.02em"}},"FitLog UI v9 · BottomSheet／鍵盤無過渡"),
+h("div",{style:{fontSize:10,color:"var(--text-ter)",textAlign:"center",marginTop:16,paddingTop:12,borderTop:"1px solid var(--border-light)",letterSpacing:"0.02em"}},"FitLog UI v10 · BottomSheet keyframes（首開鍵盤不過衝）"),
 h("button",{onClick:p.onClose,style:A({},S.btn("var(--card-alt)","var(--text-sec)","1px solid var(--border)"),{width:"100%",minHeight:44,borderRadius:"var(--radius-sm)",marginTop:16})},"關閉")))}
 
 
