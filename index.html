@@ -549,7 +549,7 @@ btn:function(bg,co,bd){return{background:bg||"var(--accent)",color:co||"#fff",bo
 input:{width:"100%",border:"1.5px solid var(--border)",borderRadius:"var(--radius-sm)",padding:"11px 14px",fontSize:16,outline:"none",boxSizing:"border-box",background:"var(--card)",transition:"border-color .2s",letterSpacing:"0.01em"},
 label:{fontSize:11,color:"var(--text-sec)",fontWeight:600,marginBottom:5,display:"block",letterSpacing:"0.06em",textTransform:"uppercase"},
 overlay:{position:"fixed",left:0,right:0,top:0,bottom:0,overflow:"hidden",boxSizing:"border-box",paddingBottom:"var(--keyboard-inset, 0px)",background:"rgba(44,37,24,0.35)",backdropFilter:"blur(8px)",WebkitBackdropFilter:"blur(8px)",zIndex:50,display:"flex",alignItems:"flex-end"},
-sheet:{background:"var(--card)",borderRadius:"20px 20px 0 0",width:"100%",maxHeight:"calc(var(--vv-height, 100vh) * 0.92)",minHeight:"calc(var(--sheet-fill-viewport, 0) * var(--vv-height, 100vh) * 0.92)",overflowY:"auto",overscrollBehavior:"contain",padding:"24px 20px calc(36px + env(safe-area-inset-bottom,12px))",WebkitOverflowScrolling:"touch",boxShadow:"var(--shadow-lg)"},
+sheet:{background:"var(--card)",borderRadius:"20px 20px 0 0",width:"100%",maxHeight:"var(--sheet-max-height, calc(var(--vv-height, 100vh) * 0.92))",minHeight:"calc(var(--sheet-fill-viewport, 0) * var(--sheet-max-height, calc(var(--vv-height, 100vh) * 0.92)))",overflowY:"auto",overscrollBehavior:"contain",padding:"24px 20px calc(36px + env(safe-area-inset-bottom,12px))",WebkitOverflowScrolling:"touch",boxShadow:"var(--shadow-lg)"},
 toast:{position:"fixed",bottom:100,left:"50%",transform:"translateX(-50%)",background:"var(--text)",color:"#fff",borderRadius:24,padding:"10px 24px",fontSize:13,fontWeight:500,zIndex:200,whiteSpace:"nowrap",boxShadow:"var(--shadow-lg)"},
 tabBtn:function(a){return{flex:1,padding:"10px 0",border:"none",background:"none",fontWeight:a?700:500,fontSize:13,color:a?"var(--accent)":"var(--text-ter)",borderBottom:a?"2.5px solid var(--accent)":"2.5px solid transparent",cursor:"pointer",transition:"all .2s",letterSpacing:"0.02em"}}
 };
@@ -560,8 +560,8 @@ var innerRef=useRef(null);
 var raf1Ref=useRef(null),raf2Ref=useRef(null);
 useLayoutEffect(function(){
 setVisible(false);
-if(innerRef.current){void innerRef.current.offsetHeight;}
 raf1Ref.current=requestAnimationFrame(function(){
+if(innerRef.current){void innerRef.current.offsetHeight;}
 raf2Ref.current=requestAnimationFrame(function(){
 setVisible(true);
 });
@@ -1039,7 +1039,7 @@ var parseCSVLine=function(line){var out=[],cur="",inQ=false;for(var i=0;i<line.l
 var importCSV=function(e){var inp=e.target,file=inp.files&&inp.files[0];if(!file)return;var reader=new FileReader();reader.onload=function(ev){try{var lines=ev.target.result.split("\n").map(function(l){return l.trim()}).filter(Boolean);if(lines.length<2){p.showToast("CSV 為空");return}var imp={};for(var i=1;i<lines.length;i++){var cols=parseCSVLine(lines[i]);var dt=cols[0],tp=cols[1],ds=cols[2],tm=cols[3];if(!dt)continue;if(!imp[dt])imp[dt]={food:[],exercise:[]};if(tp==="飲食")imp[dt].food.push({id:uid(),desc:ds,time:tm,protein:+cols[4]||0,fat:+cols[5]||0,carbs:+cols[6]||0});else if(tp==="運動")imp[dt].exercise.push({id:uid(),desc:ds,time:tm,calories:+cols[8]||0,duration:+cols[9]||0});else if(tp==="體態"){var mw=+cols[10]||0,mbf=+cols[11]||0,mmu=+cols[12]||0;if(mw>0||mbf>0||mmu>0){var mImp={};if(mw>0)mImp.weight=mw;if(mbf>0)mImp.bodyFat=mbf;if(mmu>0)mImp.muscle=mmu;imp[dt].metrics=mImp}}}var sani=sanitizeImportedAllDays(imp),impClean=sani.imp,washNote=formatImportSanitizeNote(sani.stats),preMsg="\n\n匯入會驗證日期與欄位；無效日期、過長描述／時間、異常數值會略過或截斷（最多 "+FL_IMPORT_MAX_DATES+" 天／"+FL_IMPORT_MAX_ENTRIES+" 筆）。";if(Object.keys(impClean).length===0){p.showToast("無有效日期可匯入（須為 YYYY-MM-DD）");inp.value="";return}if(!window.confirm("匯入將以 CSV 內容取代目前所有日期紀錄：檔案中未出現的日期會被清空。\n建議先匯出備份。確定繼續？"+preMsg+washNote)){inp.value="";return}var n=Object.keys(impClean).length;p.onImport(impClean).then(function(){var t2="✅ 已匯入 "+n+" 天";if(washNote)t2+="（已清洗）";p.showToast(t2)}).catch(function(err){if(!(err&&err.code===FL_STORAGE_FULL))p.showToast("匯入失敗")})}catch(err){p.showToast("匯入失敗")}finally{inp.value=""}};reader.readAsText(file)};
 var exportJSON=function(){var payload={version:1,exportedAt:new Date().toISOString(),allDays:p.allDays,favorites:p.favorites,goals:p.goals,settings:{defaultRules:(p.settings&&p.settings.defaultRules)||""}};exportBackupJSON(payload,p.showToast)};
 var importJSON=function(e){var inp=e.target,file=inp.files&&inp.files[0];if(!file)return;var reader=new FileReader();reader.onload=function(ev){try{var data=JSON.parse(ev.target.result);var allDays=data.allDays||data.days;if(!allDays||typeof allDays!=="object"||Array.isArray(allDays)){p.showToast("JSON 格式不正確：缺少 allDays");return}var imp={};Object.keys(allDays).forEach(function(dt){var day=allDays[dt]||{};var dayObj={food:day.food||[],exercise:day.exercise||[]};if(day.metrics&&typeof day.metrics==="object")dayObj.metrics=day.metrics;imp[dt]=dayObj});var sani=sanitizeImportedAllDays(imp),impClean=sani.imp,washNote=formatImportSanitizeNote(sani.stats);var parts=["所有日期紀錄"];var gSan=data.goals&&typeof data.goals==="object"&&!Array.isArray(data.goals)?sanitizeGoalsImport(data.goals):null;if(gSan)parts.push("每日目標");var importedRules=(data.settings&&data.settings.defaultRules!=null)?String(data.settings.defaultRules):((data.defaultRules!=null)?String(data.defaultRules):null);var rulesSan=importedRules!==null?sanitizeDefaultRulesStr(importedRules):null;if(importedRules!==null)parts.push("預設估算規則");var favImp=data.favorites&&Array.isArray(data.favorites),favSan=favImp?sanitizeFavoritesImport(data.favorites):null;if(favImp)parts.push("常用清單");var preMsg="\n\n匯入會驗證並清洗資料（日期、描述長度、數值範圍、筆數上限同上）。";if(Object.keys(impClean).length===0){p.showToast("無有效日期可匯入（須為 YYYY-MM-DD）");inp.value="";return}if(!window.confirm("匯入將取代："+parts.join("、")+"。\n現有資料將以備份檔為準。\n建議先匯出備份。確定繼續？"+preMsg+washNote)){inp.value="";return}var chain=Promise.resolve();if(gSan&&p.onSaveGoals)chain=chain.then(function(){return p.onSaveGoals(gSan)});if(rulesSan!==null&&p.onSaveSettings)chain=chain.then(function(){return p.onSaveSettings(A({},p.settings,{defaultRules:rulesSan}))});if(favImp&&p.onSaveFavorites)chain=chain.then(function(){return p.onSaveFavorites(favSan)});chain=chain.then(function(){return p.onImport(impClean)});chain.then(function(){var t2="✅ 已匯入備份 "+Object.keys(impClean).length+" 天";if(washNote)t2+="（已清洗）";p.showToast(t2)}).catch(function(err){if(!(err&&err.code===FL_STORAGE_FULL))p.showToast("匯入失敗")})}catch(err){p.showToast("JSON 解析失敗")}finally{inp.value=""}};reader.readAsText(file)};
-return h(BottomSheet,{onClose:p.onClose,sheetStyle:{maxHeight:"calc(var(--vv-height, 100vh) * 0.95)",minHeight:"calc(var(--sheet-fill-viewport, 0) * var(--vv-height, 100vh) * 0.95)",padding:0}},
+return h(BottomSheet,{onClose:p.onClose,sheetStyle:{maxHeight:"var(--sheet-max-height, calc(var(--vv-height, 100vh) * 0.95))",minHeight:"calc(var(--sheet-fill-viewport, 0) * var(--sheet-max-height, calc(var(--vv-height, 100vh) * 0.95)))",padding:0}},
 h("div",{style:{position:"sticky",top:0,background:"var(--card)",padding:"20px 20px 14px",borderBottom:"1px solid var(--border)",borderRadius:"20px 20px 0 0",zIndex:1}},h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center"}},h("div",{style:{fontSize:18,fontWeight:700,fontFamily:"var(--font-display)"}},"設定"),h("button",{onClick:p.onClose,style:A({},S.btn("var(--card-alt)","var(--text-sec)"),{minHeight:32,minWidth:32,padding:0,borderRadius:8,fontSize:15})},"✕"))),
 h("div",{style:{padding:"0 20px calc(36px + env(safe-area-inset-bottom,12px))"}},
 
@@ -1249,6 +1249,8 @@ var kh=Math.max(0,window.innerHeight-vv.height-(vv.offsetTop||0));
 document.documentElement.style.setProperty("--keyboard-inset",kh+"px");
 document.documentElement.style.setProperty("--vv-height",vv.height+"px");
 document.documentElement.style.setProperty("--sheet-fill-viewport",kh>0?"1":"0");
+if(kh>0){document.documentElement.style.setProperty("--sheet-max-height",vv.height+"px")}
+else{document.documentElement.style.removeProperty("--sheet-max-height")}
 };
 vv.addEventListener("resize",vvScroll);
 vv.addEventListener("scroll",vvScroll);
@@ -1259,6 +1261,7 @@ vv.removeEventListener("scroll",vvScroll);
 document.documentElement.style.setProperty("--keyboard-inset","0px");
 document.documentElement.style.removeProperty("--vv-height");
 document.documentElement.style.removeProperty("--sheet-fill-viewport");
+document.documentElement.style.removeProperty("--sheet-max-height");
 };
 },[sheet]);
 
