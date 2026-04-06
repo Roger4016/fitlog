@@ -1206,8 +1206,8 @@ var _bsd=useState(function(){try{return sessionStorage.getItem("fl_backup_stale_
 var _sbd=useState(function(){try{return sessionStorage.getItem("fl_storage_warn_dismissed")==="1"}catch(e){return false}}),storageBannerDismissed=_sbd[0],setStorageBannerDismissed=_sbd[1];
 var _ui=useState(null),undoItem=_ui[0],setUndoItem=_ui[1];
 var _msd=useState(todayStr()),metricsSheetDate=_msd[0],setMetricsSheetDate=_msd[1];
-var toastTimerRef=useRef(null),undoTimerRef=useRef(null);
-var openSheet=function(next){setSheet(next)};
+var toastTimerRef=useRef(null),undoTimerRef=useRef(null),sheetOpenRef=useRef(null);
+var openSheet=function(next){sheetOpenRef.current=next;setSheet(next)};
 
 var showToast=function(m){if(toastTimerRef.current){clearTimeout(toastTimerRef.current);toastTimerRef.current=null}setToast(m);toastTimerRef.current=setTimeout(function(){toastTimerRef.current=null;setToast(null)},2500)};
 var exportAppJSON=function(){exportBackupJSON({version:1,exportedAt:new Date().toISOString(),allDays:allDays,favorites:favorites,goals:goals,settings:{defaultRules:(settings&&settings.defaultRules)||""}},showToast)};
@@ -1223,7 +1223,7 @@ var t=e.target;
 if(t.tagName!=="INPUT"&&t.tagName!=="TEXTAREA")return;
 if(t.disabled)return;
 if(kbTimer){clearTimeout(kbTimer);kbTimer=null}
-setKbOpen(true);
+if(!sheetOpenRef.current)setKbOpen(true);
 activeEl=t;
 };
 var onB=function(e){
@@ -1235,7 +1235,7 @@ kbTimer=null;
 var ae=document.activeElement;
 if(ae&&(ae.tagName==="INPUT"||ae.tagName==="TEXTAREA")&&!ae.disabled){
 activeEl=ae;
-setKbOpen(true);
+if(!sheetOpenRef.current)setKbOpen(true);
 return;
 }
 setKbOpen(false);
