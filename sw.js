@@ -45,6 +45,7 @@ self.addEventListener('fetch', function(e) {
   // API 請求：不干預，直接走網路（避免快取敏感 token 或動態回應）
   if (isApiRequest(url)) return;
 
+
   // CDN 靜態資源：cache-first（版本固定，快取後永遠有效；離線也能使用）
   if (isCdnResource(url)) {
     e.respondWith(
