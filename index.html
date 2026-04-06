@@ -556,7 +556,7 @@ tabBtn:function(a){return{flex:1,padding:"10px 0",border:"none",background:"none
 
 function BottomSheet(p){
 var _v=useState(false),visible=_v[0],setVisible=_v[1];
-var _kb=useState(0),kbHeight=_kb[0],setKbHeight=_kb[1];
+var _kbo=useState(false),kbOpen=_kbo[0],setKbOpen=_kbo[1];
 var innerRef=useRef(null);
 var raf1Ref=useRef(null),raf2Ref=useRef(null);
 useLayoutEffect(function(){
@@ -575,13 +575,12 @@ if(raf2Ref.current)cancelAnimationFrame(raf2Ref.current);
 useEffect(function(){
 if(!window.visualViewport)return;
 var vv=window.visualViewport;
+var wasKb=false;
 var update=function(){
 var kh=Math.max(0,window.innerHeight-vv.height-(vv.offsetTop||0));
-if(kh>80){
-setKbHeight(kh);
-}else{
-setKbHeight(0);
-}
+var isKb=kh>80;
+document.documentElement.style.setProperty("--fl-kb-height",(isKb?kh:0)+"px");
+if(isKb!==wasKb){wasKb=isKb;setKbOpen(isKb);}
 };
 vv.addEventListener("resize",update);
 vv.addEventListener("scroll",update);
@@ -589,6 +588,7 @@ update();
 return function(){
 vv.removeEventListener("resize",update);
 vv.removeEventListener("scroll",update);
+document.documentElement.style.removeProperty("--fl-kb-height");
 };
 },[]);
 var overlayStyle=A({},S.overlay,{
@@ -597,13 +597,18 @@ transition:"opacity .25s ease-out"
 });
 var sheetStyle=A({},S.sheet,p.sheetStyle||{},{
 transform:visible?"translateY(0)":"translateY(100%)",
-transition:visible?"transform .35s cubic-bezier(.22,.61,.36,1), margin-bottom .15s ease-out":"none",
+transition:visible?"transform .35s cubic-bezier(.22,.61,.36,1), max-height .15s ease-out, min-height .15s ease-out, margin-bottom .15s ease-out, border-radius .15s ease-out":"none",
 willChange:"transform",
-marginBottom:kbHeight
+marginBottom:"var(--fl-kb-height, 0px)"
 });
+if(kbOpen){
+sheetStyle.maxHeight="calc(100% - var(--fl-kb-height, 0px))";
+sheetStyle.minHeight="calc(100% - var(--fl-kb-height, 0px))";
+sheetStyle.borderRadius="0";
+}
 return h("div",{style:overlayStyle,onClick:p.onOverlayClick||p.onClose},
 h("div",{ref:innerRef,style:sheetStyle,onClick:function(e){e.stopPropagation()},onTouchMove:p.onTouchMove,onTouchEnd:p.onTouchEnd},
-h("div",{"data-patch":"v5",style:{display:"none"}}),
+h("div",{"data-patch":"v6",style:{display:"none"}}),
 p.children));
 }
 
@@ -1134,7 +1139,7 @@ h("button",{onClick:async function(){p.showToast("正在清除 PWA 快取…");t
 showRaw&&h("div",{className:"fade-up",style:{maxHeight:300,overflowY:"auto",marginTop:10,background:"var(--bg)",borderRadius:"var(--radius-xs)",padding:14,border:"1px solid var(--border)"}},Object.keys(p.allDays).sort().reverse().map(function(d){var day=p.allDays[d];return h("div",{key:d,style:{marginBottom:12}},h("div",{style:{fontWeight:700,fontSize:12,color:"var(--accent)",marginBottom:4}},d,"（",weekday(d),"）"),(day.food||[]).map(function(f){var fs=normalizeAiSummary(f.aiSummary);return h("div",{key:f.id,style:{fontSize:11,color:"var(--text-sec)",padding:"2px 0 2px 12px"}},"🍽 ",fs?h("span",null,h("b",{style:{color:"var(--text)"}},"摘要 "),fs," · "):"",f.desc," — P:",(+f.protein||0).toFixed(1)," F:",(+f.fat||0).toFixed(1)," C:",(+f.carbs||0).toFixed(1)," = ",calcCal(f.protein,f.fat,f.carbs),"kcal",f.time?" ("+f.time+")":"")}),(day.exercise||[]).map(function(e){var es=normalizeAiSummary(e.aiSummary);return h("div",{key:e.id,style:{fontSize:11,color:"var(--text-sec)",padding:"2px 0 2px 12px"}},"🏃 ",es?h("span",null,h("b",{style:{color:"var(--text)"}},"摘要 "),es," · "):"",e.desc," — ",e.calories,"kcal",e.duration?" "+e.duration+"min":"",e.time?" ("+e.time+")":"")}))}),dc===0&&h("div",{style:{color:"var(--text-ter)",fontSize:13,textAlign:"center",padding:"14px 0"}},"無資料"))),
 
 
-h("div",{style:{fontSize:10,color:"var(--text-ter)",textAlign:"center",marginTop:16,paddingTop:12,borderTop:"1px solid var(--border-light)",letterSpacing:"0.02em"}},"FitLog UI v5 · BottomSheet／鍵盤"),
+h("div",{style:{fontSize:10,color:"var(--text-ter)",textAlign:"center",marginTop:16,paddingTop:12,borderTop:"1px solid var(--border-light)",letterSpacing:"0.02em"}},"FitLog UI v6 · BottomSheet／鍵盤"),
 h("button",{onClick:p.onClose,style:A({},S.btn("var(--card-alt)","var(--text-sec)","1px solid var(--border)"),{width:"100%",minHeight:44,borderRadius:"var(--radius-sm)",marginTop:16})},"關閉")))}
 
 
