@@ -1,6 +1,7 @@
 {
   "name": "FitLog 飲食運動追蹤",
   "short_name": "FitLog",
+  "version": "1.0",
   "start_url": ".",
   "display": "standalone",
   "background_color": "#faf8f5",
