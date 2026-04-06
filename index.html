@@ -548,7 +548,7 @@ cardFlat:{background:"var(--card-alt)",borderRadius:"var(--radius)",padding:16,m
 btn:function(bg,co,bd){return{background:bg||"var(--accent)",color:co||"#fff",border:bd||"none",borderRadius:"var(--radius-sm)",fontWeight:600,fontSize:14,cursor:"pointer",minHeight:44,display:"flex",alignItems:"center",justifyContent:"center",gap:6,padding:"0 16px",transition:"all .2s cubic-bezier(.22,.61,.36,1)",WebkitTapHighlightColor:"transparent",letterSpacing:"0.01em"}},
 input:{width:"100%",border:"1.5px solid var(--border)",borderRadius:"var(--radius-sm)",padding:"11px 14px",fontSize:16,outline:"none",boxSizing:"border-box",background:"var(--card)",transition:"border-color .2s",letterSpacing:"0.01em"},
 label:{fontSize:11,color:"var(--text-sec)",fontWeight:600,marginBottom:5,display:"block",letterSpacing:"0.06em",textTransform:"uppercase"},
-overlay:{position:"fixed",left:0,right:0,top:"var(--vv-offset-top, 0px)",height:"var(--vv-height, 100vh)",overflow:"hidden",background:"rgba(44,37,24,0.35)",backdropFilter:"blur(8px)",WebkitBackdropFilter:"blur(8px)",zIndex:50,display:"flex",alignItems:"flex-end"},
+overlay:{position:"fixed",left:0,right:0,top:"var(--vv-offset-top, 0px)",bottom:"var(--overlay-bottom-inset, 0px)",overflow:"hidden",background:"rgba(44,37,24,0.35)",backdropFilter:"blur(8px)",WebkitBackdropFilter:"blur(8px)",zIndex:50,display:"flex",alignItems:"flex-end"},
 sheet:{background:"var(--card)",borderRadius:"20px 20px 0 0",width:"100%",maxHeight:"92%",overflowY:"auto",overscrollBehavior:"contain",padding:"24px 20px calc(36px + env(safe-area-inset-bottom,12px))",WebkitOverflowScrolling:"touch",boxShadow:"var(--shadow-lg)"},
 toast:{position:"fixed",bottom:100,left:"50%",transform:"translateX(-50%)",background:"var(--text)",color:"#fff",borderRadius:24,padding:"10px 24px",fontSize:13,fontWeight:500,zIndex:200,whiteSpace:"nowrap",boxShadow:"var(--shadow-lg)"},
 tabBtn:function(a){return{flex:1,padding:"10px 0",border:"none",background:"none",fontWeight:a?700:500,fontSize:13,color:a?"var(--accent)":"var(--text-ter)",borderBottom:a?"2.5px solid var(--accent)":"2.5px solid transparent",cursor:"pointer",transition:"all .2s",letterSpacing:"0.02em"}}
@@ -1248,7 +1248,8 @@ var vvScroll=function(){
 var kh=Math.max(0,window.innerHeight-vv.height-(vv.offsetTop||0));
 document.documentElement.style.setProperty("--keyboard-inset",kh+"px");
 document.documentElement.style.setProperty("--vv-offset-top",(vv.offsetTop||0)+"px");
-document.documentElement.style.setProperty("--vv-height",vv.height+"px");
+var ob=kh>0?Math.max(0,kh-16):0;
+document.documentElement.style.setProperty("--overlay-bottom-inset",ob+"px");
 };
 vv.addEventListener("resize",vvScroll);
 vv.addEventListener("scroll",vvScroll);
@@ -1258,7 +1259,7 @@ vv.removeEventListener("resize",vvScroll);
 vv.removeEventListener("scroll",vvScroll);
 document.documentElement.style.setProperty("--keyboard-inset","0px");
 document.documentElement.style.removeProperty("--vv-offset-top");
-document.documentElement.style.removeProperty("--vv-height");
+document.documentElement.style.removeProperty("--overlay-bottom-inset");
 };
 },[sheet]);
 
