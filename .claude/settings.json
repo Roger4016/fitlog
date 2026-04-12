@@ -10,7 +10,9 @@
       "Bash(curl -sI \"https://unpkg.com/chart.js@4/dist/chart.umd.min.js\")",
       "Bash(curl -sI \"https://unpkg.com/chart.js@4.5.1/dist/chart.umd.min.js\")",
       "Bash(curl -sI \"https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.7/chart.umd.min.js\")",
-      "Read(//c/Users/a0989/.claude/projects/c--Users-a0989-OneDrive----project-fitlog/memory/**)"
+      "Read(//c/Users/a0989/.claude/projects/c--Users-a0989-OneDrive----project-fitlog/memory/**)",
+      "Bash(git ls-tree:*)",
+      "Bash(grep -E \"\\\\.\\(tsx?|jsx?\\)$\")"
     ]
   }
 }
