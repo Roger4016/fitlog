@@ -39,7 +39,7 @@ throw new Error("React libraries failed to load");
 var h=React.createElement,useState=React.useState,useEffect=React.useEffect,useRef=React.useRef;
 var A=Object.assign;
 var MEAL_OPTIONS=["早餐","午餐","晚餐","點心","宵夜"];
-function defaultMeal(){var hr=new Date().getHours();if(hr>=5&&hr<11)return"早餐";if(hr>=11&&hr<14)return"午餐";if(hr>=14&&hr<16)return"點心";if(hr>=16&&hr<24)return"晚餐";return"宵夜"}
+function defaultMeal(){var hr=new Date().getHours();if(hr>=5&&hr<11)return"早餐";if(hr>=11&&hr<14)return"午餐";if(hr>=14&&hr<17)return"點心";if(hr>=17&&hr<24)return"晚餐";return"宵夜"}
 var FL_STORAGE_FULL="STORAGE_FULL";
 var FL_LOCALSTORAGE_QUOTA_BYTES=5*1024*1024;
 var FL_IDB_MIGRATED_KEY="fl_idb_v1_migrated";
