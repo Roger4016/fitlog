@@ -1,4 +1,4 @@
-var CACHE = 'fitlog-1.1';
+var CACHE = 'fitlog-1.0';
 var UPDATE_TYPE = 'safe'; // 'silent' | 'safe' | 'data'
 var URLS = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png'];
 
@@ -53,8 +53,7 @@ self.addEventListener('fetch', function(e) {
         if (cached) return cached;
         return fetch(e.request).then(function(response) {
           if (response.ok) {
-            var copy = response.clone();
-            caches.open(CACHE).then(function(c) { c.put(e.request, copy); });
+            caches.open(CACHE).then(function(c) { c.put(e.request, response.clone()); });
           }
           return response;
         }).catch(function() { return cached; });
@@ -67,8 +66,7 @@ self.addEventListener('fetch', function(e) {
   e.respondWith(
     fetch(e.request).then(function(response) {
       if (response.ok) {
-        var copy = response.clone();
-        caches.open(CACHE).then(function(c) { c.put(e.request, copy); });
+        caches.open(CACHE).then(function(c) { c.put(e.request, response.clone()); });
       }
       return response;
     }).catch(function() {
