@@ -1531,11 +1531,11 @@ h("div",{style:{flex:1,minWidth:0}},h("div",{style:{fontWeight:700,fontSize:15,w
 isDel?h("div",{style:{display:"flex",gap:6,flexShrink:0}},h("button",{onClick:function(e2){e2.stopPropagation();delEx(e.id)},style:A({},S.btn("var(--red)"),{minHeight:32,padding:"0 12px",borderRadius:8,fontSize:13})},"刪除"),h("button",{onClick:function(e2){e2.stopPropagation();setConfirmDel(null)},style:A({},S.btn("var(--card-alt)","var(--text-sec)","1px solid var(--border)"),{minHeight:32,padding:"0 12px",borderRadius:8,fontSize:13})},"取消")):h("button",{onClick:function(e2){e2.stopPropagation();setConfirmDel({type:"exercise",id:e.id})},style:A({},S.btn("var(--red-light)","var(--red)","1px solid var(--red-border)"),{minHeight:32,minWidth:32,padding:0,borderRadius:8,fontSize:14,flexShrink:0})},"×")),
 h("div",{style:{display:"flex",borderTop:"1px solid var(--border-light)"}},
 h("div",{style:{flex:1,textAlign:"center",padding:"8px 0",borderRight:"1px solid var(--border-light)"}},h("div",{style:{fontSize:18,fontWeight:800,color:"var(--teal)",fontVariantNumeric:"tabular-nums"}},e.calories,h("span",{style:{fontSize:10,fontWeight:400}},"kcal")),h("div",{style:{fontSize:10,color:"var(--text-ter)"}},"消耗熱量")),
-h("div",{style:{flex:1,textAlign:"center",padding:"8px 0"}},h("div",{style:{fontSize:18,fontWeight:800,color:"var(--blue)",fontVariantNumeric:"tabular-nums"}},e.duration||"—",h("span",{style:{fontSize:10,fontWeight:400}},e.duration?"min":"")),h("div",{style:{fontSize:10,color:"var(--text-ter)"}},"運動時長"))))})),
+h("div",{style:{flex:1,textAlign:"center",padding:"8px 0"}},h("div",{style:{fontSize:18,fontWeight:800,color:"var(--blue)",fontVariantNumeric:"tabular-nums"}},e.duration||"—",h("span",{style:{fontSize:10,fontWeight:400}},e.duration?"min":"")),h("div",{style:{fontSize:10,color:"var(--text-ter)"}},"運動時長"))))}))),
 
 tab==="dashboard"&&h(DashboardTab,{allDays:allDays,goals:goals,onOpenWeekly:function(){openSheet("weekly-report")}}),
 tab==="history"&&h(HistoryTab,{allDays:allDays,goals:goals,onSelect:function(d){setDate(d);setTab("records")}}),
-tab==="metrics"&&h(MetricsTab,{allDays:allDays,settings:settings,onAdd:function(d){setMetricsSheetDate(d);openSheet("metrics")},onEdit:function(d){setMetricsSheetDate(d);openSheet("metrics")}})),
+tab==="metrics"&&h(MetricsTab,{allDays:allDays,settings:settings,onAdd:function(d){setMetricsSheetDate(d);openSheet("metrics")},onEdit:function(d){setMetricsSheetDate(d);openSheet("metrics")}}))),
 
 !kbOpen&&!sheet&&h("div",{style:{flexShrink:0,background:"var(--card)",borderTop:"1px solid var(--border)",padding:"8px 12px calc(12px + env(safe-area-inset-bottom, 0px))",boxShadow:"0 -4px 16px rgba(44,37,24,.06)"}},
 h("div",{style:{display:"flex",gap:6}},
@@ -1554,7 +1554,7 @@ sheet==="settings"&&h(SettingsSheet,{goals:goals,settings:settings,onSaveGoals:s
 undoItem&&h("div",{className:"fade-in",style:{position:"fixed",left:16,right:16,bottom:100,maxWidth:448,margin:"0 auto",zIndex:205,background:"var(--text)",color:"#fff",borderRadius:"var(--radius-sm)",padding:"10px 14px",fontSize:13,fontWeight:500,boxShadow:"var(--shadow-lg)",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}},
 h("span",{style:{flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},"已刪除 ",undoItem.desc),
 h("button",{onClick:function(){undoRestore()},style:{background:"none",border:"none",color:"#b8e8d9",fontWeight:700,fontSize:13,cursor:"pointer",flexShrink:0,padding:"6px 4px",WebkitTapHighlightColor:"transparent"}},"復原")),
-toast&&h("div",{className:"fade-in",style:A({},S.toast,{bottom:undoItem?168:100})},toast)))));
+toast&&h("div",{className:"fade-in",style:A({},S.toast,{bottom:undoItem?168:100})},toast)));
 }
 
 ReactDOM.createRoot(document.getElementById("root")).render(h(App));
